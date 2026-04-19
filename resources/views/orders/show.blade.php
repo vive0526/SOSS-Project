@@ -1,0 +1,294 @@
+@extends('layouts.admin')
+
+@section('title', 'Order Details')
+@section('page_title', 'Order Details')
+@section('page_subtitle', 'Review and manage this order')
+
+@section('content')
+    @if(session('success'))
+        <div class="admin-card">
+            <p>{{ session('success') }}</p>
+        </div>
+    @endif
+
+    @if($errors->any())
+        <div class="admin-card">
+            <p>There were some issues with your request.</p>
+        </div>
+    @endif
+
+    @php
+        $statusClass = match ($order->status) {
+            'pending' => 'status-pending',
+            'processing' => 'status-processing',
+            'shipped' => 'status-shipped',
+            'delivered' => 'status-delivered',
+            'cancelled' => 'status-cancelled',
+            default => 'status-low',
+        };
+        $shipmentClass = match ($order->shipment_status) {
+            'pending' => 'status-pending',
+            'shipped' => 'status-shipped',
+            'delivered' => 'status-delivered',
+            default => 'status-low',
+        };
+        $paymentClass = $order->payment_verified_at ? 'status-paid' : 'status-unpaid';
+        $totalItems = $order->items->sum('quantity');
+        $itemsTotal = $order->items->sum('total_price');
+        $isAdmin = auth()->user()->role === 'admin';
+    @endphp
+
+    <div class="admin-card" style="display:flex; gap:20px; flex-wrap:wrap; align-items:center;">
+        <div>
+            <div style="color:#bfbfbf; font-size:12px;">Order Number</div>
+            <div style="font-size:20px; font-weight:700;">{{ $order->order_number }}</div>
+        </div>
+        <div>
+            <div style="color:#bfbfbf; font-size:12px;">Status</div>
+            <span class="{{ $statusClass }}">{{ ucfirst($order->status) }}</span>
+        </div>
+        <div>
+            <div style="color:#bfbfbf; font-size:12px;">Payment</div>
+            <span class="{{ $paymentClass }}">{{ $order->payment_verified_at ? 'Verified' : 'Unverified' }}</span>
+        </div>
+        <div>
+            <div style="color:#bfbfbf; font-size:12px;">Shipment</div>
+            <span class="{{ $shipmentClass }}">{{ ucfirst($order->shipment_status) }}</span>
+        </div>
+        <div>
+            <div style="color:#bfbfbf; font-size:12px;">Items</div>
+            <div style="font-size:20px; font-weight:700;">{{ $totalItems }}</div>
+        </div>
+        <div>
+            <div style="color:#bfbfbf; font-size:12px;">Total</div>
+            <div style="font-size:20px; font-weight:700;">
+                RM {{ $order->total_amount > 0 ? number_format((float) $order->total_amount, 2) : number_format((float) $itemsTotal, 2) }}
+            </div>
+        </div>
+        <div>
+            <div style="color:#bfbfbf; font-size:12px;">Shipping Fee</div>
+            <div style="font-size:20px; font-weight:700;">
+                RM {{ number_format((float) ($order->shipping_fee ?? 0), 2) }}
+            </div>
+        </div>
+    </div>
+
+    <div class="admin-card" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:16px;">
+        <div>
+            <h3 style="margin-bottom: 8px;">Customer Info</h3>
+            <p><strong>Name:</strong> {{ $order->customer?->name ?? '-' }}</p>
+            <p><strong>Email:</strong> {{ $order->customer?->email ?? '-' }}</p>
+            <p><strong>Phone:</strong> {{ $order->customer?->phone ?? '-' }}</p>
+        </div>
+        <div>
+            <h3 style="margin-bottom: 8px;">Shipping Info</h3>
+            <p><strong>Name:</strong> {{ $order->shipping_name ?? '-' }}</p>
+            <p><strong>Phone:</strong> {{ $order->shipping_phone ?? '-' }}</p>
+            <p><strong>Address:</strong> {{ $order->shipping_address ?? '-' }}</p>
+            <p>
+                <strong>City/State:</strong>
+                {{ $order->shipping_city ?? '-' }} {{ $order->shipping_state ?? '' }}
+            </p>
+            <p><strong>Postcode:</strong> {{ $order->shipping_postcode ?? '-' }}</p>
+            <p><strong>Country:</strong> {{ $order->shipping_country ?? '-' }}</p>
+            <p><strong>Tracking:</strong> {{ $order->tracking_number ?? '-' }}</p>
+            <p><strong>Address Confirmed:</strong> {{ $order->shipping_confirmed_at?->format('Y-m-d H:i') ?? 'No' }}</p>
+        </div>
+        <div>
+            <h3 style="margin-bottom: 8px;">Payment Info</h3>
+            <p><strong>Method:</strong> {{ $order->payment_method ?? '-' }}</p>
+            <p><strong>Reference:</strong> {{ $order->payment_reference ?? '-' }}</p>
+            <p><strong>Verified:</strong> {{ $order->payment_verified_at?->format('Y-m-d H:i') ?? 'No' }}</p>
+        </div>
+    </div>
+
+    <div class="admin-card">
+        <h3 style="margin-bottom: 12px;">Order Items</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>No</th>
+                    <th>Product</th>
+                    <th>Maintenance Year</th>
+                    <th>Quantity</th>
+                    <th>Unit Price</th>
+                    <th>Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                @forelse($order->items as $index => $item)
+                    <tr>
+                        <td>{{ $index + 1 }}</td>
+                        <td>{{ $item->product_name }}</td>
+                        <td>{{ $item->maintenance_year ?? '-' }}</td>
+                        <td>{{ $item->quantity }}</td>
+                        <td>RM {{ number_format((float) $item->unit_price, 2) }}</td>
+                        <td>RM {{ number_format((float) $item->total_price, 2) }}</td>
+                    </tr>
+                @empty
+                    <tr>
+                        <td colspan="6">No items recorded for this order.</td>
+                    </tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
+
+    <div class="admin-card" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:16px;">
+        <div>
+            <h3 style="margin-bottom: 12px;">Update Status</h3>
+            @if($order->status === 'cancelled')
+                <p>Reopen the order to update status.</p>
+            @else
+                <form method="POST" action="{{ route('orders.update-status', $order) }}">
+                    @csrf
+                    @method('PATCH')
+                    <label for="status">Status</label>
+                    <select name="status" required>
+                        @foreach($statuses as $status)
+                            @if($status !== 'cancelled')
+                                <option value="{{ $status }}" {{ $order->status === $status ? 'selected' : '' }}>
+                                    {{ ucfirst($status) }}
+                                </option>
+                            @endif
+                        @endforeach
+                    </select>
+                    <label for="note">Note (optional)</label>
+                    <input type="text" name="note" value="">
+                    <button type="submit" class="btn btn-primary">Update Status</button>
+                </form>
+            @endif
+        </div>
+        @if($isAdmin)
+            <div>
+                <h3 style="margin-bottom: 12px;">Assign Staff/Courier</h3>
+                <form method="POST" action="{{ route('orders.assign', $order) }}">
+                    @csrf
+                    @method('PATCH')
+                    <label for="assigned_to">Assigned To</label>
+                    <input type="text" name="assigned_to" value="{{ $order->assigned_to }}">
+                    <button type="submit" class="btn btn-outline">Save Assignment</button>
+                </form>
+            </div>
+        @endif
+        <div>
+            <h3 style="margin-bottom: 12px;">Payment Verification</h3>
+            <form method="POST" action="{{ route('orders.verify-payment', $order) }}">
+                @csrf
+                @method('PATCH')
+                <button type="submit"
+                        class="btn btn-primary"
+                        {{ $order->payment_verified_at || $order->status === 'cancelled' ? 'disabled' : '' }}>
+                    @if($order->status === 'cancelled')
+                        Payment Cancelled
+                    @else
+                        {{ $order->payment_verified_at ? 'Payment Verified' : 'Verify Payment' }}
+                    @endif
+                </button>
+            </form>
+        </div>
+        <div>
+            <h3 style="margin-bottom: 12px;">Shipment Process</h3>
+            @if($order->status === 'cancelled')
+                <p>Shipment updates are disabled for cancelled orders.</p>
+            @else
+                <form method="POST" action="{{ route('orders.update-shipment', $order) }}">
+                    @csrf
+                    @method('PATCH')
+                    <label for="shipment_status">Shipment Status</label>
+                    <select name="shipment_status" required>
+                        @foreach($shipmentStatuses as $shipmentStatus)
+                            <option value="{{ $shipmentStatus }}"
+                                {{ $order->shipment_status === $shipmentStatus ? 'selected' : '' }}>
+                                {{ ucfirst($shipmentStatus) }}
+                            </option>
+                        @endforeach
+                    </select>
+                    <label for="tracking_number">Tracking Number</label>
+                    <input type="text" name="tracking_number" value="{{ $order->tracking_number }}">
+                    <label for="shipping_name">Shipping Name</label>
+                    <input type="text" name="shipping_name" value="{{ $order->shipping_name }}">
+                    <label for="shipping_phone">Shipping Phone</label>
+                    <input type="text" name="shipping_phone" value="{{ $order->shipping_phone }}">
+                    <label for="shipping_address">Shipping Address</label>
+                    <textarea name="shipping_address">{{ $order->shipping_address }}</textarea>
+                    <label for="shipping_city">City</label>
+                    <input type="text" name="shipping_city" value="{{ $order->shipping_city }}">
+                    <label for="shipping_state">State</label>
+                    <input type="text" name="shipping_state" value="{{ $order->shipping_state }}">
+                    <label for="shipping_postcode">Postcode</label>
+                    <input type="text" name="shipping_postcode" value="{{ $order->shipping_postcode }}">
+                    <label for="shipping_country">Country</label>
+                    <input type="text" name="shipping_country" value="{{ $order->shipping_country }}">
+                    @if(!$order->shipping_confirmed_at)
+                        <label style="display:flex; gap:8px; align-items:center;">
+                            <input type="checkbox" name="confirm_shipping" value="1">
+                            Confirm shipping address
+                        </label>
+                    @else
+                        <p>Address confirmed on {{ $order->shipping_confirmed_at->format('Y-m-d H:i') }}.</p>
+                    @endif
+                    <button type="submit" class="btn btn-outline">Save Shipment</button>
+                </form>
+            @endif
+        </div>
+        <div>
+            <h3 style="margin-bottom: 12px;">Cancel Order</h3>
+            @if($order->status === 'cancelled')
+                <p>This order is already cancelled.</p>
+            @else
+                <form method="POST" action="{{ route('orders.cancel', $order) }}">
+                    @csrf
+                    @method('PATCH')
+                    <label for="cancel_reason">Reason</label>
+                    <textarea name="cancel_reason" required></textarea>
+                    <button type="submit" class="btn btn-outline">Cancel Order</button>
+                </form>
+            @endif
+        </div>
+        <div>
+            <h3 style="margin-bottom: 12px;">Reopen Order</h3>
+            @if($order->status === 'cancelled')
+                <form method="POST" action="{{ route('orders.reopen', $order) }}">
+                    @csrf
+                    @method('PATCH')
+                    <label for="note">Reason (optional)</label>
+                    <input type="text" name="note" value="">
+                    <button type="submit" class="btn btn-outline">Reopen</button>
+                </form>
+            @else
+                <p>Only cancelled orders can be reopened.</p>
+            @endif
+        </div>
+    </div>
+
+    <div class="admin-card">
+        <h3 style="margin-bottom: 12px;">Status History</h3>
+        @if($order->statusHistories->isEmpty())
+            <p>No status history available.</p>
+        @else
+            <table>
+                <thead>
+                    <tr>
+                        <th>No</th>
+                        <th>Status</th>
+                        <th>Note</th>
+                        <th>Changed By</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach($order->statusHistories as $index => $history)
+                        <tr>
+                            <td>{{ $index + 1 }}</td>
+                            <td>{{ ucfirst($history->status) }}</td>
+                            <td>{{ $history->note ?? '-' }}</td>
+                            <td>{{ $history->changedBy?->name ?? '-' }}</td>
+                            <td>{{ $history->created_at?->format('Y-m-d H:i') }}</td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        @endif
+    </div>
+@endsection
