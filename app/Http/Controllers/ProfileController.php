@@ -9,7 +9,9 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Redirect;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
+use App\Notifications\CompleteProfileNotification;
 
 class ProfileController extends Controller
 {
@@ -28,6 +30,19 @@ class ProfileController extends Controller
     }
 
     /**
+     * Display the user's password change form.
+     */
+    public function editPassword(Request $request)
+    {
+        // Admin already has a dedicated profile page with password management
+        if ($request->user()->role === 'admin') {
+            return Redirect::route('admin.profile.edit');
+        }
+
+        return view('profile.password', ['user' => $request->user()]);
+    }
+
+    /**
      * Update the user's profile information.
      */
     public function update(Request $request): RedirectResponse
@@ -35,6 +50,8 @@ class ProfileController extends Controller
         $user = $request->user();
 
         // Validate profile fields (name, email, phone, shipping address)
+        $isCustomer = ($user->role ?? null) === 'customer';
+
         $request->validate([
             'name' => 'required|string|max:255',
             'email' => [
@@ -43,10 +60,12 @@ class ProfileController extends Controller
                 'max:255',
                 Rule::unique('users', 'email')->ignore($user->getKey(), $user->getKeyName()),
             ],
-            'phone' => 'nullable|string|max:20',
-            'shipping_address' => 'nullable|string|max:500',
-            'current_password' => 'nullable|current_password', // For password change
-            'new_password' => 'nullable|min:8|confirmed', // For password change
+            'phone' => ($isCustomer ? 'required' : 'nullable') . '|string|max:20',
+            'shipping_address' => ($isCustomer ? 'required' : 'nullable') . '|string|max:500',
+            'shipping_city' => ($isCustomer ? 'required' : 'nullable') . '|string|max:120',
+            'shipping_state' => ($isCustomer ? 'required' : 'nullable') . '|string|max:120',
+            'shipping_postcode' => ($isCustomer ? 'required' : 'nullable') . '|string|max:30',
+            'shipping_country' => ($isCustomer ? 'required' : 'nullable') . '|string|max:120',
         ]);
 
         // Update basic profile fields (name, email, phone, address)
@@ -55,6 +74,10 @@ class ProfileController extends Controller
             'email',
             'phone',
             'shipping_address',
+            'shipping_city',
+            'shipping_state',
+            'shipping_postcode',
+            'shipping_country',
         ]));
 
         // If email changed, reset verification (Breeze default behavior)
@@ -74,21 +97,42 @@ class ProfileController extends Controller
             $path = $request->file('profile_photo')
                             ->store('profile-photos', 'public');
 
-            $user->profile_photo = $path;
-        }
-
-        // If password is changed
-        if ($request->filled('current_password') && $request->filled('new_password')) {
-            if (Hash::check($request->current_password, $user->password)) {
-                $user->password = Hash::make($request->new_password);
-            } else {
-                return back()->withErrors(['current_password' => 'Current password is incorrect']);
-            }
-        }
+             $user->profile_photo = $path;
+         }
 
         $user->save();
 
-        return Redirect::back()->with('status', 'Profile updated successfully!');
+        if ($isCustomer && $user->isCheckoutProfileComplete() && Schema::hasTable('notifications')) {
+            $user->unreadNotifications()
+                ->where('type', CompleteProfileNotification::class)
+                ->update(['read_at' => now()]);
+
+            $request->session()->forget([
+                'show_profile_completion_modal',
+                'profile_prompt_dismissed',
+            ]);
+        }
+
+        return Redirect::back(fallback: route('profile.edit', absolute: false))
+            ->with('status', 'Profile updated successfully!');
+    }
+
+    /**
+     * Update the user's password.
+     */
+    public function updatePassword(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'current_password' => ['required', 'current_password'],
+            'new_password' => ['required', 'string', 'min:8', 'confirmed'],
+        ]);
+
+        $user = $request->user();
+        $user->password = Hash::make($request->new_password);
+        $user->save();
+
+        return Redirect::back(fallback: route('profile.edit', absolute: false))
+            ->with('status', 'Password updated successfully!');
     }
 
     /**

@@ -9,7 +9,12 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (DB::getDriverName() !== 'mysql') {
+        $driver = DB::getDriverName();
+        if ($driver !== 'mysql') {
+            if ($driver === 'sqlite' && app()->environment('testing')) {
+                return;
+            }
+
             throw new RuntimeException('This migration currently supports MySQL only.');
         }
 

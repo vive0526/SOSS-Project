@@ -150,6 +150,12 @@
                         Dashboard
                     </a>
 
+                    {{-- Notifications --}}
+                    <a class="admin-nav__link {{ request()->is('admin/notifications*') ? 'is-active' : '' }}"
+                       href="{{ route('admin.notifications.create') }}">
+                        Notifications
+                    </a>
+
                     {{-- User Management --}}
                     <button class="admin-nav__link admin-nav__toggle"
                             type="button"

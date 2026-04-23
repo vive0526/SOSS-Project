@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\InventoryMovement;
 use App\Models\Order;
 use App\Models\OrderStatusHistory;
+use App\Services\OrderPaymentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -109,7 +110,7 @@ class OrderController extends Controller
         return back()->with('success', 'Order status updated.');
     }
 
-    public function verifyPayment(Request $request, Order $order)
+    public function verifyPayment(Request $request, Order $order, OrderPaymentService $orderPaymentService)
     {
         if ($order->payment_verified_at) {
             return back()->with('success', 'Payment is already verified.');
@@ -135,35 +136,12 @@ class OrderController extends Controller
             ]);
         }
 
-        DB::transaction(function () use ($order, $request) {
-            $order->payment_verified_at = now();
-            $order->save();
-
-            foreach ($order->items as $item) {
-                if (!$item->product) {
-                    continue;
-                }
-
-                $product = $item->product;
-                $previousStock = $product->stock_quantity;
-                $newStock = $previousStock - $item->quantity;
-
-                $product->stock_quantity = $newStock;
-                $product->save();
-
-                    InventoryMovement::create([
-                        'product_id' => $product->getKey(),
-                        'user_id' => $request->user()->getKey(),
-                        'type' => 'out',
-                        'quantity' => $item->quantity,
-                        'previous_stock' => $previousStock,
-                        'new_stock' => $newStock,
-                        'reason' => 'Order ' . $order->order_number . ' payment verified.',
-                    ]);
-            }
-
-            $this->logStatus($order, $order->status, 'Payment verified.');
-        });
+        $orderPaymentService->verifyPayment(
+            $order,
+            $request->user()->getKey(),
+            $order->payment_reference,
+            'Payment verified (manual).'
+        );
 
         return back()->with('success', 'Payment verified and stock updated.');
     }

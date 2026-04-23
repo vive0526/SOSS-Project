@@ -1,10 +1,16 @@
-@extends('layouts.customer')
+@extends('layouts.storefront')
 
 @section('title', 'Payment Processing')
 @section('page_title', 'Payment Processing')
 @section('page_subtitle', 'Your order has been placed')
 
 @section('content')
+    @if($errors->any())
+        <div class="customer-card">
+            <p>{{ $errors->first() }}</p>
+        </div>
+    @endif
+
     <div class="customer-card" style="text-align:center;">
         <h2 style="margin-bottom:10px;">Thank you for your order!</h2>
         <p>Your order <strong>{{ $order->order_number }}</strong> has been placed successfully.</p>
@@ -13,6 +19,13 @@
             <strong>{{ $paymentMethods[$order->payment_method] ?? ucfirst(str_replace('_', ' ', $order->payment_method)) }}</strong>
         </p>
         <p>Please proceed with payment. We will verify and process your order soon.</p>
+        @if(in_array($order->payment_method, ['stripe_card', 'stripe_fpx'], true) && !$order->payment_verified_at)
+            <div style="margin-top:16px;">
+                <a class="btn btn-primary" href="{{ route('customer.checkout.stripe.start', $order) }}">
+                    Pay Now (Stripe)
+                </a>
+            </div>
+        @endif
         <div style="margin-top:16px; display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
             <a class="btn btn-outline" href="{{ route('customer.orders.show', $order) }}">View Order</a>
             <a class="btn btn-primary" href="{{ route('customer.products.index') }}">Continue Shopping</a>

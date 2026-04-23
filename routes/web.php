@@ -3,6 +3,8 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\AdminNotificationController;
+use App\Http\Controllers\CustomerNotificationController;
 use App\Http\Controllers\RegionController;
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\OperatingUnitController;
@@ -15,9 +17,12 @@ use App\Http\Controllers\OrderController;
 use App\Http\Controllers\CustomerOrderController;
 use App\Http\Controllers\CustomerCartController;
 use App\Http\Controllers\CustomerCheckoutController;
+use App\Http\Controllers\CustomerStripeCheckoutController;
 use App\Http\Controllers\CustomerCattleRequestController;
 use App\Http\Controllers\CattleRequestController;
 use App\Http\Controllers\CustomerUpdateController;
+use App\Http\Controllers\StripeRefundController;
+use App\Http\Controllers\StripeWebhookController;
 use App\Models\Category;
 use App\Models\Product;
 
@@ -29,6 +34,9 @@ use App\Models\Product;
 Route::get('/', function () {
     return view('welcome');
 })->name('welcome');
+
+Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle'])
+    ->name('stripe.webhook');
 
 /*
 |--------------------------------------------------------------------------|
@@ -48,12 +56,18 @@ Route::get('/customer/dashboard', function () {
         ->orderByDesc('created_at')
         ->take(8)
         ->get();
+    $collections = Category::withCount('products')
+        ->orderByDesc('products_count')
+        ->orderBy('name')
+        ->take(6)
+        ->get();
     $totalProducts = Product::count();
     $categoryCount = Category::count();
     $inStockCount = Product::where('stock_quantity', '>', 0)->count();
 
     return view('customer.dashboard', compact(
         'featuredProducts',
+        'collections',
         'totalProducts',
         'categoryCount',
         'inStockCount'
@@ -69,6 +83,11 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
     Route::get('/admin/profile', function () {
         return view('admin.profile.edit');
     })->name('admin.profile.edit');
+
+    Route::get('/admin/notifications/create', [AdminNotificationController::class, 'create'])
+        ->name('admin.notifications.create');
+    Route::post('/admin/notifications', [AdminNotificationController::class, 'store'])
+        ->name('admin.notifications.store');
 });
 
 /*
@@ -77,8 +96,17 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
 |--------------------------------------------------------------------------|
 */
 Route::middleware('auth')->group(function () {
+    Route::get('/profile', [ProfileController::class, 'edit'])
+        ->name('profile.edit');
+
     Route::patch('/profile', [ProfileController::class, 'update'])
         ->name('profile.update');
+
+    Route::get('/profile/password', [ProfileController::class, 'editPassword'])
+        ->name('profile.password.edit');
+
+    Route::patch('/profile/password', [ProfileController::class, 'updatePassword'])
+        ->name('profile.password.update');
 
     Route::delete('/profile', [ProfileController::class, 'destroy'])
         ->name('profile.destroy');
@@ -210,6 +238,8 @@ Route::middleware(['auth', 'role:admin,staff'])->group(function () {
 
 Route::middleware(['auth', 'role:admin'])->group(function () {
     Route::patch('/orders/{order}/assign', [OrderController::class, 'assign'])->name('orders.assign');
+    Route::post('/orders/{order}/refund/stripe', [StripeRefundController::class, 'store'])
+        ->name('orders.refund.stripe');
 });
 
 Route::middleware(['auth', 'role:admin'])->group(function () {
@@ -290,6 +320,15 @@ Route::middleware(['auth', 'role:customer'])
         Route::get('/updates', [CustomerUpdateController::class, 'index'])
             ->name('updates.index');
 
+        Route::get('/notifications', [CustomerNotificationController::class, 'index'])
+            ->name('notifications.index');
+        Route::post('/notifications/read-all', [CustomerNotificationController::class, 'readAll'])
+            ->name('notifications.read-all');
+        Route::post('/notifications/{notificationId}/read', [CustomerNotificationController::class, 'read'])
+            ->name('notifications.read');
+        Route::post('/profile-prompt/dismiss', [CustomerNotificationController::class, 'dismissProfilePrompt'])
+            ->name('profile-prompt.dismiss');
+
         Route::get('/cart', [CustomerCartController::class, 'index'])
             ->name('cart.index');
         Route::post('/cart/add', [CustomerCartController::class, 'add'])
@@ -305,6 +344,12 @@ Route::middleware(['auth', 'role:customer'])
             ->name('checkout.place');
         Route::get('/checkout/processing/{order}', [CustomerCheckoutController::class, 'processing'])
             ->name('checkout.processing');
+        Route::get('/checkout/stripe/{order}', [CustomerStripeCheckoutController::class, 'start'])
+            ->name('checkout.stripe.start');
+        Route::get('/checkout/stripe/success', [CustomerStripeCheckoutController::class, 'success'])
+            ->name('checkout.stripe.success');
+        Route::get('/checkout/stripe/cancel/{order}', [CustomerStripeCheckoutController::class, 'cancel'])
+            ->name('checkout.stripe.cancel');
 
         Route::get('/orders', [CustomerOrderController::class, 'index'])
             ->name('orders.index');
@@ -328,11 +373,6 @@ Route::middleware(['auth', 'role:customer'])
             ->name('cattle-requests.store');
     });
 
-// Product reports (Admin & Staff)
-Route::middleware(['auth', 'role:admin,staff'])->group(function () {
-    Route::get('products/reports', [ReportController::class, 'generateReport'])->name('products.reports');
-});
-
 /*
 |--------------------------------------------------------------------------|
 | Dashboard Redirection                                                     |
@@ -348,16 +388,5 @@ Route::middleware('auth')->get('/dashboard', function () {
         default => abort(403),
     };
 })->name('dashboard');
-
-/*
-|--------------------------------------------------------------------------|
-| Customer Profile Routes (Profile Edit and Update)                        |
-|--------------------------------------------------------------------------|
-*/
-Route::middleware(['auth'])->group(function () {
-    // Profile route for customer to view and edit profile
-    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
-    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
-});
 
 require __DIR__.'/auth.php';

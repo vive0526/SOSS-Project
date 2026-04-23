@@ -1,4 +1,13 @@
 <IfModule mod_rewrite.c>
+    <IfModule mod_setenvif.c>
+        # Local development (XAMPP/Apache): avoid stale/locked Laravel cache files
+        # by pointing cache paths to dev-only files (which typically don't exist).
+        # This forces Laravel to load `.env` and prevents broken route/config caches
+        # from affecting localhost.
+        SetEnvIfNoCase Host "^(localhost|127\.0\.0\.1)(:\d+)?$" APP_CONFIG_CACHE=bootstrap/cache/config-dev.php
+        SetEnvIfNoCase Host "^(localhost|127\.0\.0\.1)(:\d+)?$" APP_ROUTES_CACHE=bootstrap/cache/routes-dev.php
+    </IfModule>
+
     <IfModule mod_negotiation.c>
         Options -MultiViews -Indexes
     </IfModule>

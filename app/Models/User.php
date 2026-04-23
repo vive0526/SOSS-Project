@@ -35,6 +35,10 @@ class User extends Authenticatable
         'phone',
         'profile_photo',
         'shipping_address',
+        'shipping_city',
+        'shipping_state',
+        'shipping_postcode',
+        'shipping_country',
     ];
 
     /**
@@ -58,5 +62,48 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    public function isCheckoutProfileComplete(): bool
+    {
+        if (($this->role ?? null) !== 'customer') {
+            return true;
+        }
+
+        return filled($this->phone)
+            && filled($this->shipping_address)
+            && filled($this->shipping_city)
+            && filled($this->shipping_state)
+            && filled($this->shipping_postcode)
+            && filled($this->shipping_country);
+    }
+
+    public function missingCheckoutProfileFields(): array
+    {
+        if (($this->role ?? null) !== 'customer') {
+            return [];
+        }
+
+        $missing = [];
+        if (!filled($this->phone)) {
+            $missing[] = 'phone number';
+        }
+        if (!filled($this->shipping_address)) {
+            $missing[] = 'shipping address';
+        }
+        if (!filled($this->shipping_city)) {
+            $missing[] = 'city';
+        }
+        if (!filled($this->shipping_state)) {
+            $missing[] = 'state';
+        }
+        if (!filled($this->shipping_postcode)) {
+            $missing[] = 'postcode';
+        }
+        if (!filled($this->shipping_country)) {
+            $missing[] = 'country';
+        }
+
+        return $missing;
     }
 }

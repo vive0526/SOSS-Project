@@ -6,8 +6,10 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\OrderStatusHistory;
 use App\Models\Product;
+use App\Notifications\CompleteProfileNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class CustomerCheckoutController extends Controller
 {
@@ -17,6 +19,8 @@ class CustomerCheckoutController extends Controller
         'cash_on_delivery' => 'Cash on Delivery',
         'bank_transfer' => 'Bank Transfer',
         'fpx' => 'FPX',
+        'stripe_card' => 'Card (Stripe)',
+        'stripe_fpx' => 'FPX (Stripe)',
     ];
 
     public function index(Request $request)
@@ -25,6 +29,11 @@ class CustomerCheckoutController extends Controller
         if (empty($cart)) {
             return redirect()->route('customer.cart.index')
                 ->withErrors(['cart' => 'Your cart is empty.']);
+        }
+
+        $profileRedirect = $this->guardCheckoutProfile($request);
+        if ($profileRedirect) {
+            return $profileRedirect;
         }
 
         $totals = $this->calculateTotals($cart);
@@ -45,6 +54,11 @@ class CustomerCheckoutController extends Controller
         if (empty($cart)) {
             return redirect()->route('customer.cart.index')
                 ->withErrors(['cart' => 'Your cart is empty.']);
+        }
+
+        $profileRedirect = $this->guardCheckoutProfile($request);
+        if ($profileRedirect) {
+            return $profileRedirect;
         }
 
         $data = $request->validate([
@@ -117,6 +131,10 @@ class CustomerCheckoutController extends Controller
 
         $request->session()->forget('cart');
 
+        if (in_array($order->payment_method, ['stripe_card', 'stripe_fpx'], true)) {
+            return redirect()->route('customer.checkout.stripe.start', $order);
+        }
+
         return redirect()->route('customer.checkout.processing', $order)
             ->with('success', 'Order placed successfully.');
     }
@@ -147,5 +165,31 @@ class CustomerCheckoutController extends Controller
             'subtotal' => $subtotal,
             'totalQuantity' => $totalQuantity,
         ];
+    }
+
+    private function guardCheckoutProfile(Request $request)
+    {
+        $user = $request->user();
+        if (!$user || $user->isCheckoutProfileComplete()) {
+            return null;
+        }
+
+        $request->session()->put('show_profile_completion_modal', true);
+
+        if (Schema::hasTable('notifications')) {
+            $exists = $user->unreadNotifications()
+                ->where('type', CompleteProfileNotification::class)
+                ->exists();
+
+            if (!$exists) {
+                $user->notify(new CompleteProfileNotification($user->missingCheckoutProfileFields()));
+            }
+        }
+
+        return redirect()
+            ->route('profile.edit')
+            ->withErrors([
+                'profile' => 'Please update your phone number and shipping address before checkout.',
+            ]);
     }
 }

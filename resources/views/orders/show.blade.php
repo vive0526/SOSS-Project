@@ -187,6 +187,31 @@
                 </button>
             </form>
         </div>
+        @if($isAdmin && in_array($order->payment_method, ['stripe_card', 'stripe_fpx'], true))
+            <div>
+                <h3 style="margin-bottom: 12px;">Stripe Refund</h3>
+                <form method="POST" action="{{ route('orders.refund.stripe', $order) }}">
+                    @csrf
+                    <label for="amount">Amount (RM, optional)</label>
+                    <input type="number" step="0.01" min="0.01" name="amount" value="">
+                    <label for="reason">Reason (optional)</label>
+                    <select name="reason">
+                        <option value="">-</option>
+                        <option value="requested_by_customer">Requested by customer</option>
+                        <option value="duplicate">Duplicate</option>
+                        <option value="fraudulent">Fraudulent</option>
+                    </select>
+                    <button type="submit" class="btn btn-outline" {{ !$order->payment_reference ? 'disabled' : '' }}>
+                        Request Refund
+                    </button>
+                </form>
+                @if($order->payment_method === 'stripe_fpx')
+                    <p style="margin-top:10px; color:#bfbfbf; font-size:12px;">
+                        FPX refunds are asynchronous and can take several days to complete.
+                    </p>
+                @endif
+            </div>
+        @endif
         <div>
             <h3 style="margin-bottom: 12px;">Shipment Process</h3>
             @if($order->status === 'cancelled')

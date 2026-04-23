@@ -19,7 +19,7 @@
 
     @if($errors->any())
         <div class="customer-card">
-            <p>There were some issues with your request.</p>
+            <p>{{ $errors->first() }}</p>
         </div>
     @endif
 
@@ -49,6 +49,17 @@
             <div><strong>Total:</strong> RM {{ $order->total_amount > 0 ? number_format((float) $order->total_amount, 2) : number_format((float) $itemsTotal, 2) }}</div>
         </div>
     </div>
+
+    @if(in_array($order->payment_method, ['stripe_card', 'stripe_fpx'], true) && !$order->payment_verified_at && $order->status !== 'cancelled')
+        <div class="customer-card" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+            <div>
+                <strong>Payment required:</strong> Complete your Stripe payment to verify this order.
+            </div>
+            <a class="btn btn-primary" href="{{ route('customer.checkout.stripe.start', $order) }}">
+                Pay Now (Stripe)
+            </a>
+        </div>
+    @endif
 
     <div class="customer-card" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:16px;">
         <div>

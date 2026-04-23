@@ -39,7 +39,15 @@
                 </a>
 
                 <div class="customer-nav__section">Notifications</div>
-                <a class="customer-nav__link" href="#">Promotions</a>
+                <a class="customer-nav__link {{ request()->is('customer/notifications') ? 'is-active' : '' }}"
+                   href="{{ route('customer.notifications.index') }}">
+                    Notifications
+                    @if(!empty($customerUnreadNotificationsCount))
+                        <span style="margin-left:auto; font-weight:900; color:#c0161a;">
+                            {{ $customerUnreadNotificationsCount }}
+                        </span>
+                    @endif
+                </a>
                 <a class="customer-nav__link {{ request()->is('customer/updates') ? 'is-active' : '' }}"
                    href="{{ route('customer.updates.index') }}">
                     Order Updates

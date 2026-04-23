@@ -4,9 +4,11 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
+use App\Notifications\CompleteProfileNotification;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class AuthenticatedSessionController extends Controller
@@ -28,26 +30,34 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
-            if (auth()->user()->status === 'inactive') {
-        auth()->logout();
+        if (auth()->user()->status === 'inactive') {
+            auth()->logout();
 
-        return back()->withErrors([
-            'email' => 'Your account has been deactivated, please contact the administrator.',
-        ]);
-    }
-
-        $user = auth()->user();
-
-        if ($user->role === 'admin') {
-            return redirect()->intended('/admin/dashboard');
+            return back()->withErrors([
+                'email' => 'Your account has been deactivated, please contact the administrator.',
+            ]);
         }
 
-        if ($user->role === 'staff') {
-            return redirect()->intended('/staff/dashboard');
+        $user = $request->user();
+        if ($user && ($user->role ?? null) === 'customer') {
+            $request->session()->forget('profile_prompt_dismissed');
+
+            if (!$user->isCheckoutProfileComplete()) {
+                $request->session()->put('show_profile_completion_modal', true);
+
+                if (Schema::hasTable('notifications')) {
+                    $exists = $user->unreadNotifications()
+                        ->where('type', CompleteProfileNotification::class)
+                        ->exists();
+
+                    if (!$exists) {
+                        $user->notify(new CompleteProfileNotification($user->missingCheckoutProfileFields()));
+                    }
+                }
+            }
         }
 
-        return redirect()->intended('/customer/dashboard');
-
+        return redirect()->intended(route('dashboard', absolute: false));
     }
 
     /**
@@ -61,6 +71,6 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerateToken();
 
-        return redirect('/');
+        return redirect()->route('welcome', [], 303);
     }
 }

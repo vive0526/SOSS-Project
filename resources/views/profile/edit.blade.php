@@ -5,6 +5,9 @@
 @section('page_subtitle', 'Manage your account details and security')
 
 @section('content')
+@php
+    $requiresCheckoutProfile = auth()->check() && auth()->user()->role === 'customer';
+@endphp
 <div class="customer-profile">
     <section class="customer-profile__intro">
         <div class="customer-profile__intro-text">
@@ -77,7 +80,7 @@
                 <div class="customer-form__row">
                     <div>
                         <label for="phone">Phone Number</label>
-                        <input type="text" name="phone" value="{{ old('phone', $user->phone) }}">
+                        <input type="text" name="phone" value="{{ old('phone', $user->phone) }}" {{ $requiresCheckoutProfile ? 'required' : '' }}>
                     </div>
                     <div>
                         <label for="profile_photo">Profile Photo</label>
@@ -87,40 +90,59 @@
 
                 <div>
                     <label for="shipping_address">Shipping Address</label>
-                    <textarea name="shipping_address">{{ old('shipping_address', $user->shipping_address) }}</textarea>
+                    <textarea name="shipping_address" {{ $requiresCheckoutProfile ? 'required' : '' }}>{{ old('shipping_address', $user->shipping_address) }}</textarea>
+                </div>
+
+                <div class="customer-form__row">
+                    <div>
+                        <label for="shipping_city">City</label>
+                        <input type="text"
+                               id="shipping_city"
+                               name="shipping_city"
+                               value="{{ old('shipping_city', $user->shipping_city) }}"
+                               {{ $requiresCheckoutProfile ? 'required' : '' }}>
+                    </div>
+                    <div>
+                        <label for="shipping_state">State</label>
+                        <input type="text"
+                               id="shipping_state"
+                               name="shipping_state"
+                               value="{{ old('shipping_state', $user->shipping_state) }}"
+                               {{ $requiresCheckoutProfile ? 'required' : '' }}>
+                    </div>
+                </div>
+
+                <div class="customer-form__row">
+                    <div>
+                        <label for="shipping_postcode">Postcode</label>
+                        <input type="text"
+                               id="shipping_postcode"
+                               name="shipping_postcode"
+                               value="{{ old('shipping_postcode', $user->shipping_postcode) }}"
+                               {{ $requiresCheckoutProfile ? 'required' : '' }}>
+                    </div>
+                    <div>
+                        <label for="shipping_country">Country</label>
+                        <input type="text"
+                               id="shipping_country"
+                               name="shipping_country"
+                               value="{{ old('shipping_country', $user->shipping_country ?? 'Malaysia') }}"
+                               {{ $requiresCheckoutProfile ? 'required' : '' }}>
+                    </div>
                 </div>
 
                 <button type="submit" class="btn btn-primary">Save Changes</button>
             </form>
         </section>
 
-        {{-- Change Password Form --}}
+        {{-- Change Password Link --}}
         <section class="customer-card customer-profile__card">
             <div class="customer-card__head">
                 <h3>Security settings</h3>
-                <p>Update your password regularly to keep your account safe.</p>
+                <p>Change your password on a dedicated page.</p>
             </div>
-            <form class="customer-form" action="{{ route('profile.update') }}" method="POST">
-                @csrf
-                @method('PATCH')
 
-                <div>
-                    <label for="current_password">Current Password</label>
-                    <input type="password" name="current_password">
-                </div>
-
-                <div>
-                    <label for="new_password">New Password</label>
-                    <input type="password" name="new_password">
-                </div>
-
-                <div>
-                    <label for="new_password_confirmation">Confirm New Password</label>
-                    <input type="password" name="new_password_confirmation">
-                </div>
-
-                <button type="submit" class="btn btn-primary">Update Password</button>
-            </form>
+            <a href="{{ route('profile.password.edit') }}" class="btn btn-primary">Change Password</a>
         </section>
     </div>
 </div>

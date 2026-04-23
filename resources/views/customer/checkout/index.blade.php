@@ -1,4 +1,4 @@
-@extends('layouts.customer')
+@extends('layouts.storefront')
 
 @section('title', 'Checkout')
 @section('page_title', 'Checkout')
@@ -35,24 +35,24 @@
                 <label for="shipping_address">Address</label>
                 <textarea name="shipping_address" required>{{ old('shipping_address', $customer->shipping_address) }}</textarea>
             </div>
-            <div class="customer-form__row">
+                <div class="customer-form__row">
                 <div class="customer-field">
                     <label for="shipping_city">City</label>
-                    <input type="text" name="shipping_city" value="{{ old('shipping_city') }}" required>
+                    <input type="text" name="shipping_city" value="{{ old('shipping_city', $customer->shipping_city) }}" required>
                 </div>
                 <div class="customer-field">
                     <label for="shipping_state">State</label>
-                    <input type="text" name="shipping_state" value="{{ old('shipping_state') }}" required>
+                    <input type="text" name="shipping_state" value="{{ old('shipping_state', $customer->shipping_state) }}" required>
                 </div>
             </div>
             <div class="customer-form__row">
                 <div class="customer-field">
                     <label for="shipping_postcode">Postcode</label>
-                    <input type="text" name="shipping_postcode" value="{{ old('shipping_postcode') }}" required>
+                    <input type="text" name="shipping_postcode" value="{{ old('shipping_postcode', $customer->shipping_postcode) }}" required>
                 </div>
                 <div class="customer-field">
                     <label for="shipping_country">Country</label>
-                    <input type="text" name="shipping_country" value="{{ old('shipping_country', 'Malaysia') }}" required>
+                    <input type="text" name="shipping_country" value="{{ old('shipping_country', $customer->shipping_country ?? 'Malaysia') }}" required>
                 </div>
             </div>
             <div class="customer-field">

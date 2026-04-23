@@ -9,10 +9,6 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (DB::getDriverName() !== 'mysql') {
-            throw new RuntimeException('This migration currently supports MySQL only.');
-        }
-
         Schema::table('users', function (Blueprint $table) {
             $table->string('user_id', 16)->nullable()->unique()->after('id');
         });
@@ -72,9 +68,22 @@ return new class extends Migration
 
     private function syncCounterFromTable(string $tableName, string $column, string $prefix): void
     {
+        $driver = DB::getDriverName();
+        $startPosition = strlen($prefix) + 1;
+
+        $castType = match ($driver) {
+            'mysql' => 'UNSIGNED',
+            'sqlite' => 'INTEGER',
+            default => null,
+        };
+
+        if ($castType === null) {
+            throw new RuntimeException("Unsupported database driver [{$driver}] for prefixed-id counter sync.");
+        }
+
         $maxNumber = DB::table($tableName)
             ->whereNotNull($column)
-            ->selectRaw('MAX(CAST(SUBSTRING(' . $column . ', ' . (strlen($prefix) + 1) . ') AS UNSIGNED)) as max_num')
+            ->selectRaw('MAX(CAST(SUBSTR(' . $column . ', ' . $startPosition . ') AS ' . $castType . ')) as max_num')
             ->value('max_num');
 
         $nextNumber = ((int) $maxNumber) > 0 ? ((int) $maxNumber) + 1 : 1001;

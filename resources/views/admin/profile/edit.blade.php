@@ -6,7 +6,9 @@
 @section('body_class', 'admin-body--profile')
 
 @section('content')
-    @php($user = auth()->user())
+    @php
+        $user = auth()->user();
+    @endphp
 
     <div class="admin-profile-page">
         <div class="admin-card admin-profile-card admin-profile-card--wide">

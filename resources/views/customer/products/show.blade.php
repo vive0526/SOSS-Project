@@ -1,4 +1,4 @@
-@extends('layouts.customer')
+@extends('layouts.storefront')
 
 @section('title', $product->name)
 @section('page_title', $product->name)
