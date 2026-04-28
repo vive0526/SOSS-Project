@@ -17,8 +17,6 @@ class CustomerCheckoutController extends Controller
 
     private const PAYMENT_METHODS = [
         'cash_on_delivery' => 'Cash on Delivery',
-        'bank_transfer' => 'Bank Transfer',
-        'fpx' => 'FPX',
         'stripe_card' => 'Card (Stripe)',
         'stripe_fpx' => 'FPX (Stripe)',
     ];

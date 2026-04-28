@@ -101,8 +101,13 @@ class CustomerStripeCheckoutController extends Controller
             $reference = $paymentIntentId ?: $session->id;
             $orderPaymentService->verifyPayment($order, null, $reference, 'Payment verified via Stripe (customer return).');
 
-            return redirect()->route('customer.orders.show', $order)
-                ->with('success', 'Payment successful. Your order is now verified.');
+            $request->session()->flash('success', 'Payment successful. Your order is now verified.');
+
+            return view('customer.checkout.stripe_success', [
+                'order' => $order,
+                'redirectUrl' => route('customer.orders.show', $order),
+                'delayMs' => 2500,
+            ]);
         }
 
         return redirect()->route('customer.orders.show', $order)

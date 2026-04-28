@@ -32,7 +32,16 @@ use App\Models\Product;
 |--------------------------------------------------------------------------|
 */
 Route::get('/', function () {
-    return view('welcome');
+    $featuredProducts = Product::with('category')
+        ->where('stock_quantity', '>', 0)
+        ->orderByDesc('stock_quantity')
+        ->orderByDesc('updated_at')
+        ->take(4)
+        ->get();
+
+    $heroProduct = $featuredProducts->first();
+
+    return view('welcome', compact('featuredProducts', 'heroProduct'));
 })->name('welcome');
 
 Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle'])
@@ -344,12 +353,12 @@ Route::middleware(['auth', 'role:customer'])
             ->name('checkout.place');
         Route::get('/checkout/processing/{order}', [CustomerCheckoutController::class, 'processing'])
             ->name('checkout.processing');
-        Route::get('/checkout/stripe/{order}', [CustomerStripeCheckoutController::class, 'start'])
-            ->name('checkout.stripe.start');
         Route::get('/checkout/stripe/success', [CustomerStripeCheckoutController::class, 'success'])
             ->name('checkout.stripe.success');
         Route::get('/checkout/stripe/cancel/{order}', [CustomerStripeCheckoutController::class, 'cancel'])
             ->name('checkout.stripe.cancel');
+        Route::get('/checkout/stripe/{order}', [CustomerStripeCheckoutController::class, 'start'])
+            ->name('checkout.stripe.start');
 
         Route::get('/orders', [CustomerOrderController::class, 'index'])
             ->name('orders.index');

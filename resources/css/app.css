@@ -338,6 +338,632 @@ button:disabled {
     opacity: 0.7;
     cursor: not-allowed;
 }
+
+/* =========================
+   WELCOME PAGE (SCOPED)
+========================= */
+.welcome-page {
+    min-height: 100vh;
+    /* Scoped palette for the welcome page only (mid-tone, professional). */
+    --black: #0b0f19;
+    --dark: #101827;
+    --white: #f8fafc;
+    --gray: #cbd5e1;
+
+    /* Accent (matches dark photo backgrounds well; tweak freely). */
+    --accent: #dc2626;
+    --accent-hover: #f87171;
+    --accent-rgb: 220, 38, 38;
+
+    /* Keep existing button/link tokens working on this page. */
+    --gold: var(--accent);
+    --gold-light: var(--accent-hover);
+
+    /* Swap this to a photo/GIF in `public/images` (e.g. url('/images/bg.webp') or url('/images/bg.gif')). */
+    --welcome-wallpaper-url: url('https://static.vecteezy.com/system/resources/thumbnails/026/859/832/small_2x/of-raw-meat-with-herbs-and-spices-on-a-black-background-with-copy-space-free-photo.jpg');
+
+    position: relative;
+    overflow-x: hidden;
+    background: linear-gradient(180deg, #0b0f19 0%, #0d1424 45%, #070b14 100%);
+}
+
+/* Animated "wallpaper" layers */
+.welcome-page::before,
+.welcome-page::after {
+    content: "";
+    position: fixed;
+    inset: -20vh -20vw;
+    z-index: -1;
+    pointer-events: none;
+}
+
+.welcome-page::before {
+    background-image:
+        var(--welcome-wallpaper-url),
+        radial-gradient(820px 560px at 18% 18%, rgba(var(--accent-rgb), 0.22), transparent 60%),
+        radial-gradient(980px 620px at 78% 26%, rgba(var(--accent-rgb), 0.14), transparent 62%),
+        radial-gradient(900px 640px at 70% 78%, rgba(var(--accent-rgb), 0.1), transparent 60%),
+        radial-gradient(920px 650px at 24% 82%, rgba(255, 255, 255, 0.08), transparent 60%);
+    background-repeat: no-repeat;
+    background-size: cover, auto, auto, auto, auto;
+    background-position: center, center, center, center, center;
+    background-blend-mode: normal, screen, screen, screen, screen;
+    filter: saturate(1.05) contrast(1.05);
+    transform: translate3d(0, 0, 0);
+    animation: welcomeWallpaperDrift 18s ease-in-out infinite alternate;
+}
+
+.welcome-page::after {
+    background:
+        linear-gradient(0deg, rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0.42)),
+        repeating-linear-gradient(
+            135deg,
+            rgba(255, 255, 255, 0.03) 0px,
+            rgba(255, 255, 255, 0.03) 1px,
+            transparent 1px,
+            transparent 8px
+        );
+    opacity: 0.28;
+    mix-blend-mode: overlay;
+    animation: welcomeGrainShift 7s steps(8) infinite;
+}
+
+.welcome-header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    padding: 18px 56px;
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    gap: 18px;
+    background: rgba(8, 16, 33, 0.68);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(12px);
+}
+
+.welcome-brand {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    color: var(--white);
+}
+
+.welcome-brand__mark {
+    letter-spacing: 0.18em;
+    font-weight: 800;
+    padding: 10px 12px;
+    border: 1px solid rgba(var(--accent-rgb), 0.35);
+    border-radius: 10px;
+    background: rgba(var(--accent-rgb), 0.12);
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.55);
+}
+
+.welcome-brand__sub {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.9rem;
+}
+
+.welcome-nav {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.welcome-nav a {
+    color: rgba(255, 255, 255, 0.78);
+    font-weight: 600;
+}
+
+.welcome-nav a:hover {
+    color: var(--gold-light);
+}
+
+.welcome-nav__pill {
+    padding: 10px 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(255, 255, 255, 0.88);
+}
+
+.welcome-nav__pill.is-outline {
+    border-color: rgba(var(--accent-rgb), 0.45);
+    color: var(--gold);
+    background: rgba(var(--accent-rgb), 0.12);
+}
+
+.welcome-actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.welcome-shop {
+    border-radius: 999px;
+}
+
+.welcome-hero {
+    padding: 72px 56px 36px;
+    display: grid;
+    grid-template-columns: 1.05fr 0.95fr;
+    gap: 40px;
+    align-items: start;
+}
+
+.welcome-hero__content {
+    padding-top: 10px;
+}
+
+.welcome-kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(var(--accent-rgb), 0.22);
+    background: rgba(0, 0, 0, 0.22);
+    color: rgba(255, 255, 255, 0.78);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    animation: welcomeFadeUp 0.75s ease-out both;
+}
+
+.welcome-title {
+    margin-top: 18px;
+    font-size: 3.2rem;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    animation: welcomeFadeUp 0.85s ease-out both;
+    animation-delay: 0.06s;
+}
+
+.welcome-lead {
+    margin-top: 16px;
+    max-width: 55ch;
+    color: rgba(255, 255, 255, 0.72);
+    font-size: 1.12rem;
+    line-height: 1.7;
+    animation: welcomeFadeUp 0.85s ease-out both;
+    animation-delay: 0.12s;
+}
+
+.welcome-cta-row {
+    margin-top: 26px;
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    animation: welcomeFadeUp 0.85s ease-out both;
+    animation-delay: 0.18s;
+}
+
+.welcome-cta-btn {
+    border-radius: 999px;
+}
+
+.welcome-metrics {
+    margin-top: 34px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    animation: welcomeFadeUp 0.95s ease-out both;
+    animation-delay: 0.22s;
+}
+
+.welcome-metric {
+    padding: 16px 16px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.welcome-metric__value {
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    color: var(--gold-light);
+    text-transform: uppercase;
+    font-size: 0.95rem;
+}
+
+.welcome-metric__label {
+    margin-top: 6px;
+    color: rgba(255, 255, 255, 0.7);
+    font-weight: 600;
+}
+
+.welcome-showcase {
+    position: relative;
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(15, 27, 45, 0.42);
+    overflow: hidden;
+    box-shadow: 0 30px 70px rgba(0, 0, 0, 0.65);
+    animation: welcomeFadeUp 0.95s ease-out both;
+    animation-delay: 0.08s;
+}
+
+.welcome-showcase__bg {
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(540px 260px at 60% 25%, rgba(94, 234, 212, 0.18), transparent 65%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 40%);
+    pointer-events: none;
+}
+
+.welcome-showcase__image {
+    position: relative;
+    height: 290px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 18px 18px 8px;
+}
+
+.welcome-showcase__image img {
+    width: min(92%, 360px);
+    height: 100%;
+    object-fit: contain;
+    filter: drop-shadow(0 22px 42px rgba(0, 0, 0, 0.75));
+    animation: welcomeFloat 4.5s ease-in-out infinite;
+}
+
+.welcome-showcase__placeholder {
+    width: 100%;
+    height: 100%;
+    border-radius: 14px;
+    border: 1px dashed rgba(255, 255, 255, 0.18);
+    display: grid;
+    place-items: center;
+    color: rgba(255, 255, 255, 0.62);
+    background: rgba(0, 0, 0, 0.22);
+    text-align: center;
+    padding: 18px;
+}
+
+.welcome-showcase__panel {
+    position: relative;
+    padding: 18px 18px 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(0, 0, 0, 0.22);
+}
+
+.welcome-panel__title {
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-size: 0.92rem;
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.welcome-panel__subtitle {
+    margin-top: 6px;
+    color: rgba(255, 255, 255, 0.62);
+    font-weight: 600;
+}
+
+.welcome-panel__list {
+    margin-top: 14px;
+    display: grid;
+    gap: 10px;
+}
+
+.welcome-panel__item {
+    display: grid;
+    grid-template-columns: 56px 1fr auto;
+    gap: 12px;
+    align-items: center;
+    padding: 10px 10px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.03);
+    transform-origin: center;
+}
+
+.welcome-panel__item:hover {
+    transform: translateY(-2px);
+    border-color: rgba(var(--accent-rgb), 0.45);
+    box-shadow: 0 18px 35px rgba(0, 0, 0, 0.55);
+}
+
+.welcome-panel__thumb {
+    width: 56px;
+    height: 44px;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(0, 0, 0, 0.25);
+    display: grid;
+    place-items: center;
+}
+
+.welcome-panel__thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.welcome-panel__thumbText {
+    font-size: 0.72rem;
+    color: rgba(255, 255, 255, 0.6);
+    font-weight: 700;
+}
+
+.welcome-panel__name {
+    font-weight: 800;
+    color: rgba(255, 255, 255, 0.88);
+}
+
+.welcome-panel__desc {
+    margin-top: 2px;
+    font-size: 0.86rem;
+    color: rgba(255, 255, 255, 0.62);
+}
+
+.welcome-panel__price {
+    font-weight: 900;
+    color: var(--gold-light);
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+
+.welcome-panel__btn {
+    margin-top: 16px;
+    width: 100%;
+    text-align: center;
+    border-radius: 999px;
+}
+
+.welcome-products {
+    padding: 36px 56px 62px;
+}
+
+.welcome-section-head {
+    display: grid;
+    gap: 8px;
+    margin-bottom: 18px;
+}
+
+.welcome-section-head h2 {
+    font-size: 1.8rem;
+    letter-spacing: -0.02em;
+}
+
+.welcome-section-head p {
+    color: rgba(255, 255, 255, 0.68);
+    max-width: 70ch;
+}
+
+.welcome-product-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.welcome-product-card {
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.03);
+    overflow: hidden;
+    box-shadow: 0 22px 55px rgba(0, 0, 0, 0.55);
+    animation: welcomeFadeUp 0.85s ease-out both;
+}
+
+.welcome-product-card:nth-child(1) { animation-delay: 0.04s; }
+.welcome-product-card:nth-child(2) { animation-delay: 0.08s; }
+.welcome-product-card:nth-child(3) { animation-delay: 0.12s; }
+.welcome-product-card:nth-child(4) { animation-delay: 0.16s; }
+
+.welcome-product-card:hover {
+    transform: translateY(-6px);
+    border-color: rgba(var(--accent-rgb), 0.35);
+    box-shadow: 0 28px 75px rgba(0, 0, 0, 0.7);
+}
+
+.welcome-product-card__media {
+    height: 170px;
+    background: rgba(15, 27, 45, 0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.welcome-product-card__media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.welcome-product-card__placeholder {
+    color: rgba(255, 255, 255, 0.62);
+    font-weight: 700;
+}
+
+.welcome-product-card__body {
+    padding: 16px 16px 18px;
+    display: grid;
+    gap: 10px;
+}
+
+.welcome-product-card__meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.welcome-badge {
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: rgba(var(--accent-rgb), 0.12);
+    border: 1px solid rgba(var(--accent-rgb), 0.25);
+    color: rgba(255, 255, 255, 0.85);
+    font-weight: 800;
+    font-size: 0.78rem;
+}
+
+.welcome-stock {
+    color: rgba(255, 255, 255, 0.62);
+    font-weight: 700;
+    font-size: 0.82rem;
+}
+
+.welcome-product-card__title {
+    font-size: 1.05rem;
+    letter-spacing: -0.01em;
+}
+
+.welcome-product-card__desc {
+    color: rgba(255, 255, 255, 0.68);
+    line-height: 1.55;
+    min-height: 3.1em;
+}
+
+.welcome-product-card__footer {
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.welcome-product-card__price {
+    font-weight: 900;
+    color: var(--gold-light);
+    letter-spacing: 0.02em;
+}
+
+.welcome-empty {
+    padding: 16px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.03);
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.welcome-footer {
+    padding: 36px 56px 56px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(8, 16, 33, 0.32);
+}
+
+.welcome-footer__inner {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+    flex-wrap: wrap;
+}
+
+.welcome-footer__brand {
+    font-weight: 900;
+    letter-spacing: 0.16em;
+}
+
+.welcome-footer__muted {
+    margin-top: 8px;
+    color: rgba(255, 255, 255, 0.6);
+    font-weight: 600;
+}
+
+.welcome-footer__links {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.welcome-footer__links a {
+    color: rgba(255, 255, 255, 0.72);
+    font-weight: 700;
+}
+
+.welcome-footer__links a:hover {
+    color: var(--gold-light);
+}
+
+@keyframes welcomeFadeUp {
+    from {
+        opacity: 0;
+        transform: translateY(22px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes welcomeFloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+}
+
+@keyframes welcomeWallpaperDrift {
+    from { transform: translate3d(-1.5%, -1%, 0) scale(1.02) rotate(-0.25deg); }
+    to { transform: translate3d(1.5%, 1%, 0) scale(1.06) rotate(0.25deg); }
+}
+
+@keyframes welcomeGrainShift {
+    from { transform: translate3d(-2%, -2%, 0); }
+    to { transform: translate3d(2%, 2%, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .welcome-page::before,
+    .welcome-page::after,
+    .welcome-showcase__image img {
+        animation: none !important;
+    }
+}
+
+@media (max-width: 1100px) {
+    .welcome-hero {
+        grid-template-columns: 1fr;
+    }
+
+    .welcome-product-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 760px) {
+    .welcome-header {
+        padding: 16px 18px;
+        grid-template-columns: 1fr;
+        justify-items: start;
+    }
+
+    .welcome-actions {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    .welcome-hero {
+        padding: 56px 18px 28px;
+    }
+
+    .welcome-title {
+        font-size: 2.4rem;
+    }
+
+    .welcome-metrics {
+        grid-template-columns: 1fr;
+    }
+
+    .welcome-products,
+    .welcome-footer {
+        padding-left: 18px;
+        padding-right: 18px;
+    }
+
+    .welcome-product-grid {
+        grid-template-columns: 1fr;
+    }
+}
 /* =========================
    ADMIN THEME (BLACK/GOLD)
    Scoped: admin layout only

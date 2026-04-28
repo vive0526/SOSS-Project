@@ -1,69 +1,187 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sawit Online Sales System</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body>
+<body class="welcome-page">
+@php
+    $shopNowUrl = route('login');
+    $primaryCtaUrl = auth()->check() ? route('dashboard') : $shopNowUrl;
+    $primaryCtaLabel = auth()->check() ? 'Go to Dashboard' : 'Shop Now';
+@endphp
 
-<header class="guest-header">
-    <h2>SOSS</h2>
-    <nav>
-        <a href="#">About</a>
-        <a href="#">Contact</a>
+<header class="welcome-header">
+    <a class="welcome-brand" href="{{ route('welcome') }}">
+        <span class="welcome-brand__mark">SOSS</span>
+        <span class="welcome-brand__sub">Sawit Online Sales System</span>
+    </a>
+
+    <nav class="welcome-nav">
+        <a href="#products">Products</a>
+        <a href="#why">Why Us</a>
+        <a href="#contact">Contact</a>
         @auth
-            <a href="{{ route('dashboard') }}" class="btn btn-primary">
-                Dashboard
-            </a>
-        @else
-            <a href="{{ route('login') }}">Login</a>
-            <a href="{{ route('register') }}" class="btn btn-outline">
-                Register
-            </a>
+            <a href="{{ route('dashboard') }}" class="welcome-nav__pill">Dashboard</a>
         @endauth
     </nav>
+
+    <div class="welcome-actions">
+        <a href="{{ $primaryCtaUrl }}" class="btn btn-outline welcome-shop">
+            {{ $primaryCtaLabel }}
+        </a>
+    </div>
 </header>
 
-<section class="hero">
-    <div>
-        <h1>Sawit Online Sales & Management System</h1>
-        <p>
-            A secure and efficient platform for managing products, orders,
-            inventory, and operations - built for enterprise and SMEs.
-        </p>
-        <div class="hero-actions" style="animation: fadeUp 1s ease-out;">
-            @auth
-                <a href="{{ route('dashboard') }}" class="btn btn-primary">
-                Go to Dashboard
-                </a>
-            @else
-                <a href="{{ route('login') }}" class="btn btn-primary">
-                Login
-                </a>
-                <a href="{{ route('register') }}" class="btn btn-outline">
-                 Register
-                </a>
-            @endauth
-        </div>
-    </div>
+<main>
+    <section class="welcome-hero">
+        <div class="welcome-hero__content">
+            <div class="welcome-kicker">Fresh stock • Fast checkout • Secure access</div>
+            <h1 class="welcome-title">Everything you need to run your sales.</h1>
+            <p class="welcome-lead">
+                Browse products, track stock, place orders, and manage operations in one modern system.
+                Pick a product, then click <strong>Shop Now</strong> to login and purchase.
+            </p>
 
-    <div>
-        <div class="product-grid">
-            <div class="product-card">
-                <h3>Fast Ordering</h3>
-                <p>Streamlined ordering process for customers and staff.</p>
+            <div class="welcome-cta-row">
+                <a href="{{ $primaryCtaUrl }}" class="btn btn-primary welcome-cta-btn">
+                    {{ $primaryCtaLabel }}
+                </a>
             </div>
-            <div class="product-card">
-                <h3>Secure Access</h3>
-                <p>Role-based authentication for admin, staff, and customers.</p>
-            </div>
-            <div class="product-card">
-                <h3>Real-time Control</h3>
-                <p>Monitor inventory, payments, and operations in real time.</p>
+
+            <div class="welcome-metrics" id="why">
+                <div class="welcome-metric">
+                    <div class="welcome-metric__value">Live</div>
+                    <div class="welcome-metric__label">Stock visibility</div>
+                </div>
+                <div class="welcome-metric">
+                    <div class="welcome-metric__value">Role</div>
+                    <div class="welcome-metric__label">Based security</div>
+                </div>
+                <div class="welcome-metric">
+                    <div class="welcome-metric__value">Fast</div>
+                    <div class="welcome-metric__label">Order workflow</div>
+                </div>
             </div>
         </div>
-    </div>
-</section>
+
+        <aside class="welcome-hero__showcase" aria-label="Featured product preview">
+            <div class="welcome-showcase">
+                <div class="welcome-showcase__bg"></div>
+
+                <div class="welcome-showcase__image">
+                    @if(!empty($heroProduct?->image))
+                        <img src="{{ asset('storage/' . $heroProduct->image) }}" alt="{{ $heroProduct->name }}">
+                    @else
+                        <div class="welcome-showcase__placeholder">Your product image will appear here</div>
+                    @endif
+                </div>
+
+                <div class="welcome-showcase__panel">
+                    <div class="welcome-panel__title">In-stock picks</div>
+                    <div class="welcome-panel__subtitle">
+                        Showing {{ $featuredProducts->count() }} available product{{ $featuredProducts->count() === 1 ? '' : 's' }}.
+                    </div>
+
+                    <div class="welcome-panel__list">
+                        @forelse($featuredProducts as $product)
+                            <div class="welcome-panel__item">
+                                <div class="welcome-panel__thumb">
+                                    @if($product->image)
+                                        <img src="{{ asset('storage/' . $product->image) }}" alt="{{ $product->name }}">
+                                    @else
+                                        <span class="welcome-panel__thumbText">No image</span>
+                                    @endif
+                                </div>
+                                <div class="welcome-panel__info">
+                                    <div class="welcome-panel__name">{{ $product->name }}</div>
+                                    <div class="welcome-panel__desc">
+                                        {{ \Illuminate\Support\Str::limit($product->description, 52) }}
+                                    </div>
+                                </div>
+                                <div class="welcome-panel__price">
+                                    RM {{ number_format((float) $product->price, 2) }}
+                                </div>
+                            </div>
+                        @empty
+                            <div class="welcome-empty">
+                                No products are currently in stock.
+                            </div>
+                        @endforelse
+                    </div>
+
+                    @guest
+                        <a href="{{ route('login') }}" class="btn btn-outline welcome-panel__btn">
+                            Shop Now
+                        </a>
+                    @else
+                        <a href="{{ route('dashboard') }}" class="btn btn-outline welcome-panel__btn">
+                            Continue
+                        </a>
+                    @endguest
+                </div>
+            </div>
+        </aside>
+    </section>
+
+    <section class="welcome-products" id="products">
+        <div class="welcome-section-head">
+            <h2>Featured Products</h2>
+            <p>Always-in-stock items from your product list.</p>
+        </div>
+
+        <div class="welcome-product-grid">
+            @forelse($featuredProducts as $product)
+                <article class="welcome-product-card">
+                    <div class="welcome-product-card__media">
+                        @if($product->image)
+                            <img src="{{ asset('storage/' . $product->image) }}" alt="{{ $product->name }}">
+                        @else
+                            <div class="welcome-product-card__placeholder">No image</div>
+                        @endif
+                    </div>
+                    <div class="welcome-product-card__body">
+                        <div class="welcome-product-card__meta">
+                            <span class="welcome-badge">
+                                {{ $product->category?->name ?? 'Product' }}
+                            </span>
+                            <span class="welcome-stock">
+                                {{ $product->stock_quantity }} in stock
+                            </span>
+                        </div>
+                        <h3 class="welcome-product-card__title">{{ $product->name }}</h3>
+                        <p class="welcome-product-card__desc">
+                            {{ \Illuminate\Support\Str::limit($product->description, 120) }}
+                        </p>
+                        <div class="welcome-product-card__footer">
+                            <div class="welcome-product-card__price">
+                                RM {{ number_format((float) $product->price, 2) }}
+                            </div>
+                            <a href="{{ route('login') }}" class="btn btn-primary">
+                                Shop Now
+                            </a>
+                        </div>
+                    </div>
+                </article>
+            @empty
+                <div class="welcome-empty">Add products with stock &gt; 0 to show them here.</div>
+            @endforelse
+        </div>
+    </section>
+
+    <footer class="welcome-footer" id="contact">
+        <div class="welcome-footer__inner">
+            <div>
+                <div class="welcome-footer__brand">SOSS</div>
+                <div class="welcome-footer__muted">
+                    Sawit Online Sales System • {{ now()->format('Y') }}
+                </div>
+            </div>
+        </div>
+    </footer>
+</main>
 
 </body>
 </html>
