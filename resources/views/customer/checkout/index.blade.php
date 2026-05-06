@@ -57,13 +57,20 @@
             </div>
             <div class="customer-field">
                 <label for="payment_method">Payment Method</label>
-                <select name="payment_method" required>
+                <select name="payment_method" id="payment_method" required>
                     @foreach($paymentMethods as $value => $label)
                         <option value="{{ $value }}" {{ old('payment_method') === $value ? 'selected' : '' }}>
                             {{ $label }}
                         </option>
                     @endforeach
                 </select>
+
+                <div class="customer-alert" id="stripeReservationNotice" style="margin-top:12px; display:none;">
+                    <div>
+                        For Card/FPX (Stripe) payments, your items are reserved for 5 minutes after you confirm checkout.
+                        Please complete payment within that time to avoid the order being cancelled.
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -103,4 +110,21 @@
             <button type="submit" class="btn btn-primary">Confirm Checkout</button>
         </div>
     </form>
+
+    <script>
+        (function () {
+            const select = document.getElementById('payment_method');
+            const notice = document.getElementById('stripeReservationNotice');
+            if (!select || !notice) return;
+
+            const update = () => {
+                const v = String(select.value || '');
+                const isStripe = (v === 'stripe_card' || v === 'stripe_fpx');
+                notice.style.display = isStripe ? 'block' : 'none';
+            };
+
+            select.addEventListener('change', update);
+            update();
+        })();
+    </script>
 @endsection
