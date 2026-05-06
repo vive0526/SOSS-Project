@@ -47,6 +47,8 @@ class Order extends Model
         'payment_method',
         'payment_reference',
         'payment_verified_at',
+        'reserved_at',
+        'reservation_expires_at',
         'shipping_name',
         'shipping_phone',
         'shipping_address',
@@ -61,6 +63,8 @@ class Order extends Model
 
     protected $casts = [
         'payment_verified_at' => 'datetime',
+        'reserved_at' => 'datetime',
+        'reservation_expires_at' => 'datetime',
         'shipping_confirmed_at' => 'datetime',
         'cancelled_at' => 'datetime',
         'total_amount' => 'decimal:2',

@@ -21,7 +21,7 @@
 
     <nav class="welcome-nav">
         <a href="#products">Products</a>
-        <a href="#why">Why Us</a>
+        <a href="#about">About Us</a>
         <a href="#contact">Contact</a>
         @auth
             <a href="{{ route('dashboard') }}" class="welcome-nav__pill">Dashboard</a>
@@ -51,7 +51,7 @@
                 </a>
             </div>
 
-            <div class="welcome-metrics" id="why">
+            <div class="welcome-metrics">
                 <div class="welcome-metric">
                     <div class="welcome-metric__value">Live</div>
                     <div class="welcome-metric__label">Stock visibility</div>
@@ -126,6 +126,33 @@
         </aside>
     </section>
 
+    <section class="welcome-about" id="about" aria-labelledby="about-title">
+        <div class="welcome-section-head">
+            <h2 id="about-title">About Us</h2>
+            <p>Learn a little more about our company and how we serve you.</p>
+        </div>
+
+        <div class="welcome-about-card">
+            <div class="welcome-about-card__logo">
+                <img src="{{ asset('images/sawit-kinabalu-logo.png') }}" alt="Sawit Kinabalu logo" loading="lazy">
+            </div>
+
+            <div class="welcome-about-card__content">
+                <div class="welcome-about-card__name">SAWIT KINABALU</div>
+                <div class="welcome-about-card__desc">
+                    We believe development and nature can coexist. Through strong partnerships with government agencies, NGOs, researchers, and local communities, we work to protect and restore Sabah’s forests while creating lasting environmental value. 
+                    Together, we can cultivate a greener tomorrow.
+                </div>
+
+                <ul class="welcome-about-points">
+                    <li>Quality-first products and consistent availability</li>
+                    <li>Fast, organized order processing</li>
+                    <li>Secure access for customers and staff</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
     <section class="welcome-products" id="products">
         <div class="welcome-section-head">
             <h2>Featured Products</h2>
@@ -185,4 +212,3 @@
 
 </body>
 </html>
-

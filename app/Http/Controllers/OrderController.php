@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\InventoryMovement;
 use App\Models\Order;
 use App\Models\OrderStatusHistory;
+use App\Models\Product;
 use App\Services\OrderPaymentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -226,23 +227,51 @@ class OrderController extends Controller
         }
 
         $shouldReturnStock = $order->payment_verified_at && $order->shipment_status === 'pending';
+        $shouldReleaseReservation = !$order->payment_verified_at && $order->reserved_at !== null;
         $order->load('items.product');
 
-        DB::transaction(function () use ($order, $shouldReturnStock, $data) {
-            $order->status = 'cancelled';
-            $order->cancelled_at = now();
-            $order->cancelled_reason = $data['cancel_reason'];
-            $order->save();
+        DB::transaction(function () use ($order, $shouldReturnStock, $shouldReleaseReservation, $data) {
+            /** @var \App\Models\Order|null $lockedOrder */
+            $lockedOrder = Order::query()
+                ->whereKey($order->getKey())
+                ->lockForUpdate()
+                ->first();
+
+            if (!$lockedOrder || $lockedOrder->status === 'cancelled') {
+                return;
+            }
+
+            $lockedOrder->load('items.product');
+
+            $lockedOrder->status = 'cancelled';
+            $lockedOrder->cancelled_at = now();
+            $lockedOrder->cancelled_reason = $data['cancel_reason'];
+            $lockedOrder->save();
+
+            $productIds = collect($lockedOrder->items)->pluck('product_id')->filter()->unique()->values()->all();
+            $products = Product::query()
+                ->whereIn('product_id', $productIds)
+                ->orderBy('product_id')
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('product_id');
 
             if ($shouldReturnStock) {
-                foreach ($order->items as $item) {
-                    if (!$item->product) {
+                foreach ($lockedOrder->items as $item) {
+                    $productId = (string) ($item->product_id ?? '');
+                    /** @var \App\Models\Product|null $product */
+                    $product = $productId !== '' ? $products->get($productId) : null;
+
+                    if (!$product && $item->product) {
+                        $product = $item->product;
+                    }
+
+                    if (!$product) {
                         continue;
                     }
 
-                    $product = $item->product;
-                    $previousStock = $product->stock_quantity;
-                    $newStock = $previousStock + $item->quantity;
+                    $previousStock = (int) $product->stock_quantity;
+                    $newStock = $previousStock + (int) $item->quantity;
 
                     $product->stock_quantity = $newStock;
                     $product->save();
@@ -254,8 +283,29 @@ class OrderController extends Controller
                         'quantity' => $item->quantity,
                         'previous_stock' => $previousStock,
                         'new_stock' => $newStock,
-                        'reason' => 'Order ' . $order->order_number . ' cancelled (stock returned).',
+                        'reason' => 'Order ' . $lockedOrder->order_number . ' cancelled (stock returned).',
                     ]);
+                }
+            }
+
+            if ($shouldReleaseReservation) {
+                foreach ($lockedOrder->items as $item) {
+                    $productId = (string) ($item->product_id ?? '');
+                    /** @var \App\Models\Product|null $product */
+                    $product = $productId !== '' ? $products->get($productId) : null;
+
+                    if (!$product && $item->product) {
+                        $product = $item->product;
+                    }
+
+                    if (!$product) {
+                        continue;
+                    }
+
+                    $qty = (int) $item->quantity;
+                    $currentReserved = (int) ($product->reserved_quantity ?? 0);
+                    $product->reserved_quantity = max(0, $currentReserved - $qty);
+                    $product->save();
                 }
             }
         });
@@ -263,6 +313,9 @@ class OrderController extends Controller
         $note = 'Cancelled: ' . $data['cancel_reason'];
         if ($shouldReturnStock) {
             $note .= ' Stock returned.';
+        }
+        if ($shouldReleaseReservation) {
+            $note .= ' Stock reservation released.';
         }
         $this->logStatus($order, 'cancelled', $note);
 

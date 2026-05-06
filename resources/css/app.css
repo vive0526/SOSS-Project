@@ -412,11 +412,11 @@ button:disabled {
     position: sticky;
     top: 0;
     z-index: 50;
-    padding: 18px 56px;
+    padding: 12px 44px;
     display: grid;
     grid-template-columns: 1fr auto auto;
     align-items: center;
-    gap: 18px;
+    gap: 14px;
     background: rgba(8, 16, 33, 0.68);
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     backdrop-filter: blur(12px);
@@ -425,29 +425,29 @@ button:disabled {
 .welcome-brand {
     display: flex;
     align-items: baseline;
-    gap: 12px;
+    gap: 10px;
     color: var(--white);
 }
 
 .welcome-brand__mark {
     letter-spacing: 0.18em;
     font-weight: 800;
-    padding: 10px 12px;
+    padding: 8px 10px;
     border: 1px solid rgba(var(--accent-rgb), 0.35);
     border-radius: 10px;
     background: rgba(var(--accent-rgb), 0.12);
-    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.55);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
 }
 
 .welcome-brand__sub {
     color: rgba(255, 255, 255, 0.7);
-    font-size: 0.9rem;
+    font-size: 0.85rem;
 }
 
 .welcome-nav {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 12px;
     flex-wrap: wrap;
     justify-content: center;
 }
@@ -455,6 +455,7 @@ button:disabled {
 .welcome-nav a {
     color: rgba(255, 255, 255, 0.78);
     font-weight: 600;
+    font-size: 0.92rem;
 }
 
 .welcome-nav a:hover {
@@ -462,7 +463,7 @@ button:disabled {
 }
 
 .welcome-nav__pill {
-    padding: 10px 14px;
+    padding: 8px 12px;
     border-radius: 999px;
     border: 1px solid rgba(255, 255, 255, 0.12);
     background: rgba(255, 255, 255, 0.04);
@@ -482,6 +483,12 @@ button:disabled {
 
 .welcome-shop {
     border-radius: 999px;
+    padding: 9px 16px;
+    font-size: 0.92rem;
+}
+
+.welcome-shop.btn-outline {
+    border-width: 1px;
 }
 
 .welcome-hero {
@@ -716,8 +723,75 @@ button:disabled {
     border-radius: 999px;
 }
 
+.welcome-about {
+    padding: 36px 56px 18px;
+    scroll-margin-top: 76px;
+}
+
+.welcome-about-card {
+    padding: 18px 18px;
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.03);
+    box-shadow: 0 22px 55px rgba(0, 0, 0, 0.55);
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    gap: 18px;
+    align-items: start;
+}
+
+.welcome-about-card__logo {
+    width: 120px;
+    height: 120px;
+    border-radius: 22px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(0, 0, 0, 0.22);
+    display: grid;
+    place-items: center;
+}
+
+.welcome-about-card__logo svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.welcome-about-card__logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    padding: 12px;
+    display: block;
+}
+
+.welcome-about-card__name {
+    font-weight: 900;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.welcome-about-card__desc {
+    margin-top: 10px;
+    max-width: 75ch;
+    color: rgba(255, 255, 255, 0.72);
+    line-height: 1.7;
+    font-weight: 600;
+}
+
+.welcome-about-points {
+    margin-top: 12px;
+    padding-left: 18px;
+    display: grid;
+    gap: 8px;
+    color: rgba(255, 255, 255, 0.68);
+    font-weight: 600;
+}
+
 .welcome-products {
     padding: 36px 56px 62px;
+    scroll-margin-top: 76px;
 }
 
 .welcome-section-head {
@@ -847,17 +921,20 @@ button:disabled {
 }
 
 .welcome-footer {
-    padding: 36px 56px 56px;
+    padding: 12px 44px 16px;
+    scroll-margin-top: 76px;
     border-top: 1px solid rgba(255, 255, 255, 0.06);
     background: rgba(8, 16, 33, 0.32);
 }
 
 .welcome-footer__inner {
-    display: flex;
-    align-items: flex-start;
+    display: grid;
+    grid-template-columns: 1fr;
+    align-items: start;
     justify-content: space-between;
-    gap: 18px;
-    flex-wrap: wrap;
+    gap: 14px;
+    justify-items: center;
+    text-align: center;
 }
 
 .welcome-footer__brand {
@@ -869,6 +946,85 @@ button:disabled {
     margin-top: 8px;
     color: rgba(255, 255, 255, 0.6);
     font-weight: 600;
+    font-size: 0.88rem;
+}
+
+.welcome-footer__contact {
+    justify-self: center;
+    width: min(560px, 100%);
+    text-align: left;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+.welcome-footer__title {
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-size: 0.86rem;
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.welcome-footer__grid {
+    margin-top: 10px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 18px;
+}
+
+.welcome-footer__row {
+    display: grid;
+    grid-template-columns: 16px 1fr;
+    gap: 10px;
+    align-items: start;
+}
+
+.welcome-footer__icon {
+    width: 16px;
+    height: 16px;
+    color: rgba(255, 255, 255, 0.6);
+    margin-top: 2px;
+}
+
+.welcome-footer__icon svg {
+    width: 16px;
+    height: 16px;
+    display: block;
+}
+
+.welcome-footer__field {
+    min-width: 0;
+}
+
+.welcome-footer__label {
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.62);
+    font-weight: 700;
+}
+
+.welcome-footer__value {
+    margin-top: 2px;
+    color: rgba(255, 255, 255, 0.82);
+    font-weight: 700;
+    display: inline-block;
+    word-break: break-word;
+    font-size: 0.92rem;
+    line-height: 1.35;
+    font-variant-numeric: tabular-nums;
+}
+
+.welcome-footer__grid a.welcome-footer__value:hover,
+.welcome-footer__grid a.welcome-footer__value:focus-visible {
+    color: var(--gold-light);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.welcome-footer__grid a.welcome-footer__value {
+    text-decoration: none;
 }
 
 .welcome-footer__links {
@@ -955,9 +1111,27 @@ button:disabled {
     }
 
     .welcome-products,
+    .welcome-about,
     .welcome-footer {
         padding-left: 18px;
         padding-right: 18px;
+    }
+
+    .welcome-footer__contact {
+        text-align: left;
+    }
+
+    .welcome-footer__grid {
+        grid-template-columns: 1fr;
+    }
+
+    .welcome-about-card {
+        grid-template-columns: 1fr;
+    }
+
+    .welcome-about-card__logo {
+        width: 104px;
+        height: 104px;
     }
 
     .welcome-product-grid {

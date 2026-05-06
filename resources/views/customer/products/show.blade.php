@@ -5,9 +5,19 @@
 @section('page_subtitle', $product->category?->name ?? 'Product Details')
 
 @section('content')
+    @php
+        $availableStock = max(0, (int) $product->stock_quantity - (int) ($product->reserved_quantity ?? 0));
+    @endphp
+
     @if(session('success'))
         <div class="customer-card">
             <p>{{ session('success') }}</p>
+        </div>
+    @endif
+
+    @if(session('warning'))
+        <div class="customer-card">
+            <p>{{ session('warning') }}</p>
         </div>
     @endif
 
@@ -48,8 +58,8 @@
             <div class="customer-product-detail__price" data-price-display>
                 {{ $displayPrice !== null ? 'RM ' . number_format((float) $displayPrice, 2) : 'N/A' }}
             </div>
-            <div class="customer-product-detail__stock {{ $product->stock_quantity > 0 ? 'is-in' : 'is-out' }}">
-                {{ $product->stock_quantity > 0 ? $product->stock_quantity . ' in stock' : 'Out of Stock' }}
+            <div class="customer-product-detail__stock {{ $availableStock > 0 ? 'is-in' : 'is-out' }}">
+                {{ $availableStock > 0 ? $availableStock . ' in stock' : 'Out of Stock' }}
             </div>
             <p class="customer-product-detail__desc">{{ $product->description }}</p>
 
@@ -64,7 +74,7 @@
                 <div class="customer-product-detail__actions">
                     <a class="btn btn-primary"
                        href="{{ route('customer.cattle-requests.create', $product) }}"
-                       {{ $product->stock_quantity > 0 ? '' : 'aria-disabled=true' }}>
+                       {{ $availableStock > 0 ? '' : 'aria-disabled=true' }}>
                         Request Purchase
                     </a>
                     <a class="btn btn-outline" href="{{ route('customer.products.index') }}">Back to Products</a>
@@ -108,12 +118,12 @@
                         <input type="number"
                                name="quantity"
                                min="1"
-                               max="{{ $product->stock_quantity }}"
+                               max="{{ $availableStock }}"
                                value="{{ old('quantity', 1) }}"
                                style="width:90px;"
-                               {{ $product->stock_quantity > 0 ? '' : 'disabled' }}>
+                               {{ $availableStock > 0 ? '' : 'disabled' }}>
                         <button type="submit" class="btn btn-primary"
-                                {{ $product->stock_quantity > 0 ? '' : 'disabled' }}>
+                                {{ $availableStock > 0 ? '' : 'disabled' }}>
                             Add to Cart
                         </button>
                         <a class="btn btn-outline" href="{{ route('customer.products.index') }}">Back to Products</a>

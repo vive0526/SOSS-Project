@@ -10,25 +10,21 @@ class CustomerCartController extends Controller
     public function index(Request $request)
     {
         $cart = $request->session()->get('cart', []);
-        if (!empty($cart)) {
-            $invalidKeys = [];
-            foreach ($cart as $key => $item) {
-                if (empty($item['product_id']) || !Product::find($item['product_id'])) {
-                    $invalidKeys[] = $key;
-                }
-            }
+        $priced = $this->priceCartFromDatabase($cart);
 
-            if (!empty($invalidKeys)) {
-                $request->session()->forget('cart');
-                $cart = [];
-            }
+        if (!$priced['ok']) {
+            $request->session()->forget('cart');
+            $priced = [
+                'cart' => [],
+                'subtotal' => 0.0,
+                'totalQuantity' => 0,
+            ];
         }
-        $totals = $this->calculateTotals($cart);
 
         return view('customer.cart.index', [
-            'cart' => $cart,
-            'subtotal' => $totals['subtotal'],
-            'totalQuantity' => $totals['totalQuantity'],
+            'cart' => $priced['cart'],
+            'subtotal' => $priced['subtotal'],
+            'totalQuantity' => $priced['totalQuantity'],
         ]);
     }
 
@@ -88,11 +84,8 @@ class CustomerCartController extends Controller
         $cart[$key] = [
             'key' => $key,
             'product_id' => $product->getKey(),
-            'name' => $product->name,
-            'price' => $unitPrice,
             'quantity' => $newQty,
             'maintenance_year' => $maintenanceYear,
-            'image' => $product->image,
         ];
 
         $request->session()->put('cart', $cart);
@@ -156,15 +149,29 @@ class CustomerCartController extends Controller
         $request->session()->put('cart', $cart);
 
         if ($request->expectsJson()) {
-            $totals = $this->calculateTotals($cart);
+            $priced = $this->priceCartFromDatabase($cart);
+            if (!$priced['ok']) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => $priced['message'] ?? 'Unable to update cart.',
+                ], 422);
+            }
+
+            $pricedItem = $priced['cart'][$itemKey] ?? null;
+            if (!$pricedItem) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'Cart item not found.',
+                ], 404);
+            }
 
             return response()->json([
                 'ok' => true,
                 'itemKey' => $itemKey,
                 'quantity' => (int) $data['quantity'],
-                'itemSubtotal' => (float) $cart[$itemKey]['price'] * (int) $data['quantity'],
-                'subtotal' => (float) $totals['subtotal'],
-                'totalQuantity' => (int) $totals['totalQuantity'],
+                'itemSubtotal' => (float) $pricedItem['price'] * (int) $data['quantity'],
+                'subtotal' => (float) $priced['subtotal'],
+                'totalQuantity' => (int) $priced['totalQuantity'],
             ]);
         }
 
@@ -200,17 +207,95 @@ class CustomerCartController extends Controller
         return (float) $product->price;
     }
 
-    private function calculateTotals(array $cart): array
+    /**
+     * Price the cart using authoritative data from the database.
+     *
+     * @param array<string, array<string, mixed>> $cart
+     * @return array{ok: bool, message?: string, cart?: array<string, array<string, mixed>>, subtotal?: float, totalQuantity?: int}
+     */
+    private function priceCartFromDatabase(array $cart): array
     {
-        $subtotal = 0;
+        if (empty($cart)) {
+            return [
+                'ok' => true,
+                'cart' => [],
+                'subtotal' => 0.0,
+                'totalQuantity' => 0,
+            ];
+        }
+
+        $productIds = collect($cart)->pluck('product_id')->filter()->unique()->values()->all();
+        $products = Product::whereIn('product_id', $productIds)->get()->keyBy('product_id');
+
+        $pricedCart = [];
+        $subtotal = 0.0;
         $totalQuantity = 0;
 
-        foreach ($cart as $item) {
-            $subtotal += (float) $item['price'] * (int) $item['quantity'];
-            $totalQuantity += (int) $item['quantity'];
+        foreach ($cart as $key => $item) {
+            $productId = (string) ($item['product_id'] ?? '');
+            if ($productId === '' || !$products->has($productId)) {
+                return [
+                    'ok' => false,
+                    'message' => 'A product in your cart is no longer available.',
+                ];
+            }
+
+            /** @var \App\Models\Product $product */
+            $product = $products->get($productId);
+
+            $quantity = (int) ($item['quantity'] ?? 0);
+            if ($quantity < 1) {
+                return [
+                    'ok' => false,
+                    'message' => 'Your cart has an invalid quantity. Please update your cart and try again.',
+                ];
+            }
+
+            $maintenanceYear = isset($item['maintenance_year']) && $item['maintenance_year'] !== null
+                ? (int) $item['maintenance_year']
+                : null;
+            if ($maintenanceYear === 0) {
+                $maintenanceYear = null;
+            }
+
+            if ((string) $product->category_id === '3') {
+                if (!$maintenanceYear) {
+                    return [
+                        'ok' => false,
+                        'message' => 'Select a maintenance year for your maintenance product(s).',
+                    ];
+                }
+
+                $prices = $product->maintenance_prices ?? [];
+                if (!array_key_exists($maintenanceYear, $prices)) {
+                    return [
+                        'ok' => false,
+                        'message' => 'Selected maintenance year is not available for one of your products.',
+                    ];
+                }
+            } else {
+                $maintenanceYear = null;
+            }
+
+            $unitPrice = $this->resolveUnitPrice($product, $maintenanceYear);
+
+            $pricedCart[$key] = array_merge($item, [
+                'key' => (string) ($item['key'] ?? $key),
+                'product_id' => $product->getKey(),
+                'name' => $product->name,
+                'price' => $unitPrice,
+                'quantity' => $quantity,
+                'maintenance_year' => $maintenanceYear,
+                'image' => $product->image,
+            ]);
+
+            $subtotal += $unitPrice * $quantity;
+            $totalQuantity += $quantity;
         }
 
         return [
+            'ok' => true,
+            'cart' => $pricedCart,
             'subtotal' => $subtotal,
             'totalQuantity' => $totalQuantity,
         ];

@@ -155,6 +155,23 @@
         @endif
 
         <div class="sf-container sf-content">
+            @if(session('warning'))
+                <div class="customer-alert" id="sfFlashWarning" style="margin-bottom:16px;">
+                    <div class="customer-alert__title">Please note</div>
+                    <div>{{ session('warning') }}</div>
+                </div>
+                <script>
+                    (function () {
+                        const el = document.getElementById('sfFlashWarning');
+                        if (!el) return;
+                        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        setTimeout(() => {
+                            el.style.transition = 'opacity 250ms ease';
+                            el.style.opacity = '0';
+                        }, 6500);
+                    })();
+                </script>
+            @endif
             @yield('content')
         </div>
     </main>
