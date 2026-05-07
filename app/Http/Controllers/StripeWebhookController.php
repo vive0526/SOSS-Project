@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Order;
 use App\Models\OrderStatusHistory;
 use App\Services\OrderPaymentService;
+use App\Services\OrderStateEngine;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Stripe\Event;
@@ -14,7 +15,7 @@ use Stripe\Webhook;
 
 class StripeWebhookController extends Controller
 {
-    public function handle(Request $request, OrderPaymentService $orderPaymentService)
+    public function handle(Request $request, OrderPaymentService $orderPaymentService, OrderStateEngine $orderStateEngine)
     {
         $payload = $request->getContent();
         $sigHeader = (string) $request->header('Stripe-Signature');
@@ -84,6 +85,15 @@ class StripeWebhookController extends Controller
                 if (($session->payment_status ?? null) === 'paid') {
                     $orderPaymentService->verifyPayment($order, null, $reference, 'Payment verified via Stripe webhook (completed).');
                 } else {
+                    try {
+                        $orderStateEngine->transitionPaymentStatus($order, 'pending');
+                    } catch (\DomainException $e) {
+                        Log::warning('Stripe checkout completed but local payment status transition failed.', [
+                            'order_id' => $order->getKey(),
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+
                     OrderStatusHistory::create([
                         'order_id' => $order->getKey(),
                         'status' => $order->status,
@@ -101,6 +111,15 @@ class StripeWebhookController extends Controller
             }
 
             if ($event->type === 'checkout.session.async_payment_failed') {
+                try {
+                    $orderStateEngine->transitionPaymentStatus($order, 'unpaid', 'async_payment_failed', true);
+                } catch (\DomainException $e) {
+                    Log::warning('Stripe async payment failed but local payment status transition failed.', [
+                        'order_id' => $order->getKey(),
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+
                 OrderStatusHistory::create([
                     'order_id' => $order->getKey(),
                     'status' => $order->status,
@@ -111,6 +130,15 @@ class StripeWebhookController extends Controller
             }
 
             if ($event->type === 'checkout.session.expired') {
+                try {
+                    $orderStateEngine->transitionPaymentStatus($order, 'unpaid', 'checkout_session_expired', true);
+                } catch (\DomainException $e) {
+                    Log::warning('Stripe checkout expired but local payment status transition failed.', [
+                        'order_id' => $order->getKey(),
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+
                 OrderStatusHistory::create([
                     'order_id' => $order->getKey(),
                     'status' => $order->status,
@@ -128,6 +156,27 @@ class StripeWebhookController extends Controller
             if ($paymentIntentId) {
                 $order = Order::where('payment_reference', $paymentIntentId)->first();
                 if ($order) {
+                    $expected = (int) round(((float) $order->total_amount) * 100);
+                    $amount = (int) ($refund->amount ?? 0);
+                    $refundStatus = (string) ($refund->status ?? '');
+
+                    try {
+                        if ($refundStatus === 'succeeded') {
+                            $next = ($expected > 0 && $amount < $expected) ? 'partial_refund' : 'refunded';
+                            $orderStateEngine->transitionPaymentStatus($order, $next);
+                        } elseif (in_array($refundStatus, ['pending', 'requires_action'], true)) {
+                            $orderStateEngine->transitionPaymentStatus($order, 'refund_pending');
+                        } elseif (in_array($refundStatus, ['failed', 'canceled'], true)) {
+                            $orderStateEngine->transitionPaymentStatus($order, 'paid', 'refund_' . $refundStatus, true);
+                        }
+                    } catch (\DomainException $e) {
+                        Log::warning('Stripe refund webhook received but local payment status transition failed.', [
+                            'order_id' => $order->getKey(),
+                            'refund_status' => $refundStatus,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+
                     OrderStatusHistory::create([
                         'order_id' => $order->getKey(),
                         'status' => $order->status,

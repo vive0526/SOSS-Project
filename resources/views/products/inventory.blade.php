@@ -45,19 +45,23 @@
                 <th>No</th>
                 <th>Name</th>
                 <th>Category</th>
-                <th>Stock Quantity</th>
+                <th>Physical Stock</th>
+                <th>Reserved</th>
+                <th>Available</th>
                 <th>Status</th>
             </tr>
             </thead>
             <tbody>
             @foreach($products as $index => $product)
                 @php
+                    $reserved = (int) ($product->reserved_quantity ?? 0);
+                    $available = $product->availableStock();
                     $stockStatus = 'In Stock';
                     $statusClass = 'status-active';
-                    if ($product->stock_quantity <= 0) {
+                    if ($available <= 0) {
                         $stockStatus = 'Out of Stock';
                         $statusClass = 'status-inactive';
-                    } elseif ($product->stock_quantity <= $threshold) {
+                    } elseif ($available <= $threshold) {
                         $stockStatus = 'Low Stock';
                         $statusClass = 'status-low';
                     }
@@ -67,6 +71,8 @@
                     <td>{{ $product->name }}</td>
                     <td>{{ $product->category?->name ?? 'Uncategorized' }}</td>
                     <td>{{ $product->stock_quantity }}</td>
+                    <td>{{ $reserved }}</td>
+                    <td>{{ $available }}</td>
                     <td><span class="{{ $statusClass }}">{{ $stockStatus }}</span></td>
                 </tr>
             @endforeach
@@ -85,16 +91,24 @@
                     <th>No</th>
                     <th>Name</th>
                     <th>Category</th>
-                    <th>Stock Quantity</th>
+                    <th>Physical Stock</th>
+                    <th>Reserved</th>
+                    <th>Available</th>
                 </tr>
                 </thead>
                 <tbody>
                 @foreach($lowStockProducts as $index => $product)
+                    @php
+                        $reserved = (int) ($product->reserved_quantity ?? 0);
+                        $available = $product->availableStock();
+                    @endphp
                     <tr>
                         <td>{{ $index + 1 }}</td>
                         <td>{{ $product->name }}</td>
                         <td>{{ $product->category?->name ?? 'Uncategorized' }}</td>
                         <td>{{ $product->stock_quantity }}</td>
+                        <td>{{ $reserved }}</td>
+                        <td>{{ $available }}</td>
                     </tr>
                 @endforeach
                 </tbody>
@@ -113,16 +127,24 @@
                     <th>No</th>
                     <th>Name</th>
                     <th>Category</th>
-                    <th>Stock Quantity</th>
+                    <th>Physical Stock</th>
+                    <th>Reserved</th>
+                    <th>Available</th>
                 </tr>
                 </thead>
                 <tbody>
                 @foreach($outOfStockProducts as $index => $product)
+                    @php
+                        $reserved = (int) ($product->reserved_quantity ?? 0);
+                        $available = $product->availableStock();
+                    @endphp
                     <tr>
                         <td>{{ $index + 1 }}</td>
                         <td>{{ $product->name }}</td>
                         <td>{{ $product->category?->name ?? 'Uncategorized' }}</td>
                         <td>{{ $product->stock_quantity }}</td>
+                        <td>{{ $reserved }}</td>
+                        <td>{{ $available }}</td>
                     </tr>
                 @endforeach
                 </tbody>

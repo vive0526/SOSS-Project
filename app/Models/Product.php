@@ -48,4 +48,12 @@ class Product extends Model
     {
         return $this->hasMany(InventoryMovement::class, 'product_id', 'product_id');
     }
+
+    public function availableStock(): int
+    {
+        $stock = (int) ($this->stock_quantity ?? 0);
+        $reserved = (int) ($this->reserved_quantity ?? 0);
+
+        return max(0, $stock - $reserved);
+    }
 }

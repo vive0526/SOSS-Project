@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Order;
 use App\Services\OrderPaymentService;
+use App\Services\OrderStateEngine;
 use App\Services\StripeCheckoutService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -12,7 +13,7 @@ use Stripe\StripeClient;
 
 class CustomerStripeCheckoutController extends Controller
 {
-    public function start(Order $order, Request $request, StripeCheckoutService $checkoutService)
+    public function start(Order $order, Request $request, StripeCheckoutService $checkoutService, OrderStateEngine $orderStateEngine)
     {
         if ($order->user_id !== $request->user()->getKey()) {
             abort(403);
@@ -56,10 +57,19 @@ class CustomerStripeCheckoutController extends Controller
         $order->payment_reference = $session->id;
         $order->save();
 
+        try {
+            $orderStateEngine->transitionPaymentStatus($order, 'pending');
+        } catch (\DomainException $e) {
+            Log::warning('Unable to set order payment status to pending.', [
+                'order_id' => $order->getKey(),
+                'error' => $e->getMessage(),
+            ]);
+        }
+
         return redirect()->away($session->url);
     }
 
-    public function success(Request $request, OrderPaymentService $orderPaymentService)
+    public function success(Request $request, OrderPaymentService $orderPaymentService, OrderStateEngine $orderStateEngine)
     {
         $sessionId = (string) $request->query('session_id');
         if ($sessionId === '') {
@@ -110,14 +120,37 @@ class CustomerStripeCheckoutController extends Controller
             ]);
         }
 
+        if ($order->payment_status !== 'pending') {
+            try {
+                $orderStateEngine->transitionPaymentStatus($order, 'pending');
+            } catch (\DomainException $e) {
+                // If the transition is not allowed, do not block the customer flow.
+                Log::warning('Unable to set order payment status to pending on customer return.', [
+                    'order_id' => $order->getKey(),
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
         return redirect()->route('customer.orders.show', $order)
             ->with('success', 'Payment pending. We will verify it shortly.');
     }
 
-    public function cancel(Order $order, Request $request)
+    public function cancel(Order $order, Request $request, OrderStateEngine $orderStateEngine)
     {
         if ($order->user_id !== $request->user()->getKey()) {
             abort(403);
+        }
+
+        if ($order->payment_status !== 'unpaid') {
+            try {
+                $orderStateEngine->transitionPaymentStatus($order, 'unpaid', 'customer_cancelled', true);
+            } catch (\DomainException $e) {
+                Log::warning('Unable to mark order as unpaid after customer cancelled Stripe checkout.', [
+                    'order_id' => $order->getKey(),
+                    'error' => $e->getMessage(),
+                ]);
+            }
         }
 
         return redirect()->route('customer.orders.show', $order)

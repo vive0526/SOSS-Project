@@ -3,13 +3,16 @@
 namespace App\Services;
 
 use App\Models\Order;
-use App\Models\OrderStatusHistory;
 use App\Models\Product;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class StripeReservationExpiryService
 {
+    public function __construct(private readonly OrderStateEngine $orderStateEngine)
+    {
+    }
+
     public function expireDueReservations(?Carbon $now = null): int
     {
         $now = $now ?: now();
@@ -77,17 +80,13 @@ class StripeReservationExpiryService
                     }
                 }
 
-                $order->status = 'cancelled';
-                $order->cancelled_at = $now;
-                $order->cancelled_reason = 'Reservation expired (5 minutes).';
-                $order->save();
-
-                OrderStatusHistory::create([
-                    'order_id' => $order->getKey(),
-                    'status' => $order->status,
-                    'note' => 'Reservation expired after 5 minutes; stock released.',
-                    'changed_by' => null,
-                ]);
+                $this->orderStateEngine->transitionPaymentStatusLocked($order, 'unpaid', 'reservation_expired', true);
+                $this->orderStateEngine->cancelOrderLocked(
+                    $order,
+                    'Reservation expired (5 minutes).',
+                    'Reservation expired after 5 minutes; stock released.',
+                    null
+                );
 
                 return true;
             });
@@ -100,4 +99,3 @@ class StripeReservationExpiryService
         return $expired;
     }
 }
-

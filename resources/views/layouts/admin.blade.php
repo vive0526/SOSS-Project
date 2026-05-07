@@ -66,12 +66,12 @@
                         <span class="admin-nav__chev">ƒ-_</span>
                     </button>
                     <div class="admin-submenu" id="submenu-payment">
-                        <a class="admin-submenu__link {{ request()->fullUrlIs('*orders*payment=unverified*') ? 'is-active' : '' }}"
-                           href="{{ route('orders.index', ['payment' => 'unverified']) }}">
+                        <a class="admin-submenu__link {{ request()->fullUrlIs('*orders*payment=unpaid*') ? 'is-active' : '' }}"
+                           href="{{ route('orders.index', ['payment' => 'unpaid']) }}">
                             Payment Verification
                         </a>
                         <a class="admin-submenu__link {{ request()->fullUrlIs('*orders*shipment_status=pending*') ? 'is-active' : '' }}"
-                           href="{{ route('orders.index', ['shipment_status' => 'pending', 'payment' => 'verified']) }}">
+                           href="{{ route('orders.index', ['shipment_status' => 'pending', 'payment' => 'paid']) }}">
                             Shipment Process
                         </a>
                     </div>
@@ -276,9 +276,9 @@
                     </div>
 
                     {{-- Monitor Verified Payments --}}
-                    <a class="admin-nav__link {{ request()->fullUrlIs('*orders*payment=unverified*') ? 'is-active' : '' }}"
-                       href="{{ route('orders.index', ['payment' => 'unverified']) }}">
-                        Monitor Verified Payments
+                    <a class="admin-nav__link {{ request()->fullUrlIs('*orders*payment=unpaid*') ? 'is-active' : '' }}"
+                       href="{{ route('orders.index', ['payment' => 'unpaid']) }}">
+                        Monitor Unpaid Payments
                     </a>
                 @endif
             </nav>

@@ -86,7 +86,7 @@ class CustomerCheckoutController extends Controller
         $reservationExpiresAt = $isStripe ? now()->addMinutes(5) : null;
 
         try {
-            $order = DB::transaction(function () use ($request, $data, $priced, $reservedAt, $reservationExpiresAt) {
+            $order = DB::transaction(function () use ($request, $data, $priced, $reservedAt, $reservationExpiresAt, $isStripe) {
                 $productIds = collect($priced['cart'])->pluck('product_id')->filter()->unique()->values()->all();
                 $products = Product::query()
                     ->whereIn('product_id', $productIds)
@@ -135,6 +135,7 @@ class CustomerCheckoutController extends Controller
                     'total_amount' => $priced['subtotal'] + self::SHIPPING_FEE,
                     'shipping_fee' => self::SHIPPING_FEE,
                     'payment_method' => $data['payment_method'],
+                    'payment_status' => $isStripe ? 'pending' : 'unpaid',
                     'shipping_name' => $data['shipping_name'],
                     'shipping_phone' => $data['shipping_phone'],
                     'shipping_address' => $data['shipping_address'],

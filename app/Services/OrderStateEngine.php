@@ -1,0 +1,227 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\Order;
+use App\Models\OrderStatusHistory;
+use Illuminate\Support\Facades\DB;
+
+class OrderStateEngine
+{
+    /**
+     * Payment status transitions. This keeps `payment_status` as the source of truth
+     * while still allowing retries (e.g. pending -> unpaid).
+     *
+     * @var array<string, array<int, string>>
+     */
+    private const PAYMENT_TRANSITIONS = [
+        'unpaid' => ['pending', 'paid'],
+        'pending' => ['unpaid', 'paid'],
+        'paid' => ['refund_pending', 'refunded', 'partial_refund'],
+        'refund_pending' => ['paid', 'refunded', 'partial_refund'],
+        'partial_refund' => ['refund_pending', 'refunded'],
+        'refunded' => [],
+    ];
+
+    /**
+     * Transition fulfillment status (orders.status) with validation + history logging.
+     */
+    public function transitionOrderStatus(Order $order, string $nextStatus, ?string $note = null, ?string $changedByUserId = null): void
+    {
+        DB::transaction(function () use ($order, $nextStatus, $note, $changedByUserId) {
+            /** @var \App\Models\Order|null $locked */
+            $locked = Order::query()->whereKey($order->getKey())->lockForUpdate()->first();
+            if (!$locked) {
+                throw new \RuntimeException('Order not found.');
+            }
+
+            $this->transitionOrderStatusLocked($locked, $nextStatus, $note, $changedByUserId);
+        });
+    }
+
+    public function transitionOrderStatusLocked(Order $lockedOrder, string $nextStatus, ?string $note = null, ?string $changedByUserId = null): void
+    {
+        if ($nextStatus === 'cancelled') {
+            throw new \DomainException('Use cancelOrder for cancellations.');
+        }
+
+        if ($lockedOrder->status === $nextStatus) {
+            return;
+        }
+
+        if (!$lockedOrder->canTransitionStatusTo($nextStatus)) {
+            throw new \DomainException('Invalid order status transition: ' . $lockedOrder->status . ' → ' . $nextStatus . '.');
+        }
+
+        $requiresPayment = in_array($nextStatus, ['processing', 'shipped', 'delivered'], true);
+        if ($requiresPayment && !$lockedOrder->isPaymentAcceptableForFulfillment()) {
+            throw new \DomainException('Payment must be paid before moving this order to ' . $nextStatus . ' (COD orders are allowed).');
+        }
+
+        $lockedOrder->status = $nextStatus;
+        $lockedOrder->cancelled_at = null;
+        $lockedOrder->cancelled_reason = null;
+        $lockedOrder->save();
+
+        OrderStatusHistory::create([
+            'order_id' => $lockedOrder->getKey(),
+            'status' => $nextStatus,
+            'note' => $note,
+            'changed_by' => $changedByUserId,
+        ]);
+    }
+
+    /**
+     * Cancel order with validation + history logging.
+     * Rule: only pending/processing, and only before shipment starts.
+     */
+    public function cancelOrder(Order $order, string $cancelReason, ?string $historyNote = null, ?string $changedByUserId = null): void
+    {
+        DB::transaction(function () use ($order, $cancelReason, $historyNote, $changedByUserId) {
+            /** @var \App\Models\Order|null $locked */
+            $locked = Order::query()->whereKey($order->getKey())->lockForUpdate()->first();
+            if (!$locked) {
+                throw new \RuntimeException('Order not found.');
+            }
+
+            $this->cancelOrderLocked($locked, $cancelReason, $historyNote, $changedByUserId);
+        });
+    }
+
+    public function cancelOrderLocked(Order $lockedOrder, string $cancelReason, ?string $historyNote = null, ?string $changedByUserId = null): void
+    {
+        if ($lockedOrder->status === 'cancelled') {
+            return;
+        }
+
+        if (!in_array($lockedOrder->status, ['pending', 'processing'], true)) {
+            throw new \DomainException('Only pending/processing orders can be cancelled.');
+        }
+
+        if ($lockedOrder->shipment_status !== 'pending') {
+            throw new \DomainException('Cannot cancel after shipment has started.');
+        }
+
+        $lockedOrder->status = 'cancelled';
+        $lockedOrder->cancelled_at = now();
+        $lockedOrder->cancelled_reason = $cancelReason;
+        $lockedOrder->save();
+
+        OrderStatusHistory::create([
+            'order_id' => $lockedOrder->getKey(),
+            'status' => 'cancelled',
+            'note' => $historyNote ?: ('Cancelled: ' . $cancelReason),
+            'changed_by' => $changedByUserId,
+        ]);
+    }
+
+    /**
+     * Reopen a cancelled order back to pending (before shipment starts).
+     */
+    public function reopenOrder(Order $order, ?string $historyNote = null, ?string $changedByUserId = null): void
+    {
+        DB::transaction(function () use ($order, $historyNote, $changedByUserId) {
+            /** @var \App\Models\Order|null $locked */
+            $locked = Order::query()->whereKey($order->getKey())->lockForUpdate()->first();
+            if (!$locked) {
+                throw new \RuntimeException('Order not found.');
+            }
+
+            $this->reopenOrderLocked($locked, $historyNote, $changedByUserId);
+        });
+    }
+
+    public function reopenOrderLocked(Order $lockedOrder, ?string $historyNote = null, ?string $changedByUserId = null): void
+    {
+        if ($lockedOrder->status !== 'cancelled') {
+            throw new \DomainException('Only cancelled orders can be reopened.');
+        }
+
+        if ($lockedOrder->shipment_status !== 'pending') {
+            throw new \DomainException('Cannot reopen after shipment has started.');
+        }
+
+        $lockedOrder->status = 'pending';
+        $lockedOrder->cancelled_at = null;
+        $lockedOrder->cancelled_reason = null;
+        $lockedOrder->shipment_status = 'pending';
+        $lockedOrder->save();
+
+        OrderStatusHistory::create([
+            'order_id' => $lockedOrder->getKey(),
+            'status' => 'pending',
+            'note' => $historyNote ?: 'Order reopened.',
+            'changed_by' => $changedByUserId,
+        ]);
+    }
+
+    /**
+     * Payment state transition with validation.
+     */
+    public function transitionPaymentStatus(Order $order, string $nextStatus, ?string $failureReason = null, bool $clearFailure = true): void
+    {
+        DB::transaction(function () use ($order, $nextStatus, $failureReason, $clearFailure) {
+            /** @var \App\Models\Order|null $locked */
+            $locked = Order::query()->whereKey($order->getKey())->lockForUpdate()->first();
+            if (!$locked) {
+                throw new \RuntimeException('Order not found.');
+            }
+
+            $this->transitionPaymentStatusLocked($locked, $nextStatus, $failureReason, $clearFailure);
+        });
+    }
+
+    public function transitionPaymentStatusLocked(Order $lockedOrder, string $nextStatus, ?string $failureReason = null, bool $clearFailure = true): void
+    {
+        if (!in_array($nextStatus, Order::PAYMENT_STATUSES, true)) {
+            throw new \DomainException('Invalid payment status: ' . $nextStatus . '.');
+        }
+
+        if ($lockedOrder->payment_status === $nextStatus) {
+            $didChangeMeta = false;
+
+            if ($clearFailure) {
+                $lockedOrder->payment_last_failed_at = null;
+                $lockedOrder->payment_last_failure_reason = null;
+                $didChangeMeta = true;
+            }
+
+            if ($failureReason !== null && $failureReason !== '') {
+                $lockedOrder->payment_last_failed_at = now();
+                $lockedOrder->payment_last_failure_reason = $failureReason;
+                $didChangeMeta = true;
+            }
+
+            if ($didChangeMeta) {
+                $lockedOrder->save();
+            }
+
+            return;
+        }
+
+        $current = (string) ($lockedOrder->payment_status ?: 'unpaid');
+        $allowed = self::PAYMENT_TRANSITIONS[$current] ?? [];
+
+        if (!in_array($nextStatus, $allowed, true)) {
+            throw new \DomainException('Invalid payment status transition: ' . $current . ' → ' . $nextStatus . '.');
+        }
+
+        $lockedOrder->payment_status = $nextStatus;
+
+        if ($nextStatus === 'paid' && !$lockedOrder->payment_verified_at) {
+            $lockedOrder->payment_verified_at = now();
+        }
+
+        if ($clearFailure) {
+            $lockedOrder->payment_last_failed_at = null;
+            $lockedOrder->payment_last_failure_reason = null;
+        }
+
+        if ($failureReason !== null && $failureReason !== '') {
+            $lockedOrder->payment_last_failed_at = now();
+            $lockedOrder->payment_last_failure_reason = $failureReason;
+        }
+
+        $lockedOrder->save();
+    }
+}

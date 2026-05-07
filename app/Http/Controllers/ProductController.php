@@ -43,12 +43,12 @@ class ProductController extends Controller
 
         $products = Product::with('category')->orderBy('name')->get();
         $lowStockProducts = Product::with('category')
-            ->where('stock_quantity', '>', 0)
-            ->where('stock_quantity', '<=', $threshold)
-            ->orderBy('stock_quantity')
+            ->whereRaw('(stock_quantity - reserved_quantity) > 0')
+            ->whereRaw('(stock_quantity - reserved_quantity) <= ?', [$threshold])
+            ->orderByRaw('(stock_quantity - reserved_quantity) asc')
             ->get();
         $outOfStockProducts = Product::with('category')
-            ->where('stock_quantity', '<=', 0)
+            ->whereRaw('(stock_quantity - reserved_quantity) <= 0')
             ->orderBy('name')
             ->get();
 

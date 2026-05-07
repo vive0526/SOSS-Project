@@ -8,7 +8,10 @@
     <div class="admin-card">
         <h3 style="margin-bottom: 12px;">{{ $product->name }}</h3>
         <p style="color:#bfbfbf; margin-bottom: 18px;">
-            Current stock: {{ $product->stock_quantity }} | Reorder level: {{ $product->reorder_level }}
+            Physical stock: {{ $product->stock_quantity }}
+            | Reserved: {{ (int) ($product->reserved_quantity ?? 0) }}
+            | Available: {{ $product->availableStock() }}
+            | Reorder level: {{ $product->reorder_level }}
         </p>
 
         <form action="{{ route('inventory.update', $product) }}" method="POST">

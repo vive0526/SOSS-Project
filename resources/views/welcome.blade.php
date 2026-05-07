@@ -161,6 +161,9 @@
 
         <div class="welcome-product-grid">
             @forelse($featuredProducts as $product)
+                @php
+                    $availableStock = $product->availableStock();
+                @endphp
                 <article class="welcome-product-card">
                     <div class="welcome-product-card__media">
                         @if($product->image)
@@ -175,7 +178,7 @@
                                 {{ $product->category?->name ?? 'Product' }}
                             </span>
                             <span class="welcome-stock">
-                                {{ $product->stock_quantity }} in stock
+                                {{ $availableStock }} in stock
                             </span>
                         </div>
                         <h3 class="welcome-product-card__title">{{ $product->name }}</h3>

@@ -7,6 +7,7 @@ use App\Models\Order;
 use App\Models\OrderStatusHistory;
 use App\Models\Product;
 use App\Services\OrderPaymentService;
+use App\Services\OrderStateEngine;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -29,11 +30,17 @@ class OrderController extends Controller
         }
 
         if ($request->filled('payment')) {
-            if ($request->input('payment') === 'verified') {
-                $query->whereNotNull('payment_verified_at');
+            $payment = (string) $request->input('payment');
+
+            // Backward compatible mapping for older URLs.
+            if ($payment === 'verified') {
+                $payment = 'paid';
+            } elseif ($payment === 'unverified') {
+                $payment = 'unpaid';
             }
-            if ($request->input('payment') === 'unverified') {
-                $query->whereNull('payment_verified_at');
+
+            if (in_array($payment, Order::PAYMENT_STATUSES, true)) {
+                $query->where('payment_status', $payment);
             }
         }
 
@@ -86,7 +93,7 @@ class OrderController extends Controller
         ]);
     }
 
-    public function updateStatus(Request $request, Order $order)
+    public function updateStatus(Request $request, Order $order, OrderStateEngine $orderStateEngine)
     {
         $data = $request->validate([
             'status' => 'required|in:' . implode(',', Order::STATUSES),
@@ -101,19 +108,23 @@ class OrderController extends Controller
             return back()->with('success', 'Order status is already set.');
         }
 
-        $order->status = $data['status'];
-        $order->cancelled_at = null;
-        $order->cancelled_reason = null;
-        $order->save();
-
-        $this->logStatus($order, $data['status'], $data['note'] ?? 'Status updated.');
+        try {
+            $orderStateEngine->transitionOrderStatus(
+                $order,
+                $data['status'],
+                $data['note'] ?? 'Status updated.',
+                auth()->id()
+            );
+        } catch (\DomainException $e) {
+            return back()->withErrors(['status' => $e->getMessage()]);
+        }
 
         return back()->with('success', 'Order status updated.');
     }
 
     public function verifyPayment(Request $request, Order $order, OrderPaymentService $orderPaymentService)
     {
-        if ($order->payment_verified_at) {
+        if ($order->payment_status === 'paid') {
             return back()->with('success', 'Payment is already verified.');
         }
 
@@ -126,8 +137,16 @@ class OrderController extends Controller
                 continue;
             }
 
-            if ($item->product->stock_quantity < $item->quantity) {
-                $insufficient[] = $item->product->name;
+            $qty = (int) $item->quantity;
+
+            if ($order->reserved_at) {
+                if ((int) $item->product->stock_quantity < $qty || (int) ($item->product->reserved_quantity ?? 0) < $qty) {
+                    $insufficient[] = $item->product->name;
+                }
+            } else {
+                if ($item->product->availableStock() < $qty) {
+                    $insufficient[] = $item->product->name;
+                }
             }
         }
 
@@ -184,7 +203,7 @@ class OrderController extends Controller
             'confirm_shipping' => 'nullable|boolean',
         ]);
 
-        if (!$order->payment_verified_at && $data['shipment_status'] !== 'pending') {
+        if ($order->payment_status !== 'paid' && $data['shipment_status'] !== 'pending') {
             return back()->withErrors(['shipment_status' => 'Verify payment before shipping this order.']);
         }
 
@@ -216,7 +235,7 @@ class OrderController extends Controller
         return back()->with('success', 'Shipment details updated.');
     }
 
-    public function cancel(Request $request, Order $order)
+    public function cancel(Request $request, Order $order, OrderStateEngine $orderStateEngine)
     {
         $data = $request->validate([
             'cancel_reason' => 'required|string|max:500',
@@ -226,89 +245,9 @@ class OrderController extends Controller
             return back()->with('success', 'Order is already cancelled.');
         }
 
-        $shouldReturnStock = $order->payment_verified_at && $order->shipment_status === 'pending';
-        $shouldReleaseReservation = !$order->payment_verified_at && $order->reserved_at !== null;
+        $shouldReturnStock = $order->payment_status === 'paid' && $order->shipment_status === 'pending';
+        $shouldReleaseReservation = $order->payment_status !== 'paid' && $order->reserved_at !== null;
         $order->load('items.product');
-
-        DB::transaction(function () use ($order, $shouldReturnStock, $shouldReleaseReservation, $data) {
-            /** @var \App\Models\Order|null $lockedOrder */
-            $lockedOrder = Order::query()
-                ->whereKey($order->getKey())
-                ->lockForUpdate()
-                ->first();
-
-            if (!$lockedOrder || $lockedOrder->status === 'cancelled') {
-                return;
-            }
-
-            $lockedOrder->load('items.product');
-
-            $lockedOrder->status = 'cancelled';
-            $lockedOrder->cancelled_at = now();
-            $lockedOrder->cancelled_reason = $data['cancel_reason'];
-            $lockedOrder->save();
-
-            $productIds = collect($lockedOrder->items)->pluck('product_id')->filter()->unique()->values()->all();
-            $products = Product::query()
-                ->whereIn('product_id', $productIds)
-                ->orderBy('product_id')
-                ->lockForUpdate()
-                ->get()
-                ->keyBy('product_id');
-
-            if ($shouldReturnStock) {
-                foreach ($lockedOrder->items as $item) {
-                    $productId = (string) ($item->product_id ?? '');
-                    /** @var \App\Models\Product|null $product */
-                    $product = $productId !== '' ? $products->get($productId) : null;
-
-                    if (!$product && $item->product) {
-                        $product = $item->product;
-                    }
-
-                    if (!$product) {
-                        continue;
-                    }
-
-                    $previousStock = (int) $product->stock_quantity;
-                    $newStock = $previousStock + (int) $item->quantity;
-
-                    $product->stock_quantity = $newStock;
-                    $product->save();
-
-                    InventoryMovement::create([
-                        'product_id' => $product->getKey(),
-                        'user_id' => auth()->id(),
-                        'type' => 'in',
-                        'quantity' => $item->quantity,
-                        'previous_stock' => $previousStock,
-                        'new_stock' => $newStock,
-                        'reason' => 'Order ' . $lockedOrder->order_number . ' cancelled (stock returned).',
-                    ]);
-                }
-            }
-
-            if ($shouldReleaseReservation) {
-                foreach ($lockedOrder->items as $item) {
-                    $productId = (string) ($item->product_id ?? '');
-                    /** @var \App\Models\Product|null $product */
-                    $product = $productId !== '' ? $products->get($productId) : null;
-
-                    if (!$product && $item->product) {
-                        $product = $item->product;
-                    }
-
-                    if (!$product) {
-                        continue;
-                    }
-
-                    $qty = (int) $item->quantity;
-                    $currentReserved = (int) ($product->reserved_quantity ?? 0);
-                    $product->reserved_quantity = max(0, $currentReserved - $qty);
-                    $product->save();
-                }
-            }
-        });
 
         $note = 'Cancelled: ' . $data['cancel_reason'];
         if ($shouldReturnStock) {
@@ -317,36 +256,111 @@ class OrderController extends Controller
         if ($shouldReleaseReservation) {
             $note .= ' Stock reservation released.';
         }
-        $this->logStatus($order, 'cancelled', $note);
+
+        try {
+            DB::transaction(function () use ($order, $shouldReturnStock, $shouldReleaseReservation, $data, $note, $orderStateEngine) {
+                /** @var \App\Models\Order|null $lockedOrder */
+                $lockedOrder = Order::query()
+                    ->whereKey($order->getKey())
+                    ->lockForUpdate()
+                    ->first();
+
+                if (!$lockedOrder) {
+                    throw new \RuntimeException('Order not found.');
+                }
+
+                $lockedOrder->load('items.product');
+
+                $productIds = collect($lockedOrder->items)->pluck('product_id')->filter()->unique()->values()->all();
+                $products = Product::query()
+                    ->whereIn('product_id', $productIds)
+                    ->orderBy('product_id')
+                    ->lockForUpdate()
+                    ->get()
+                    ->keyBy('product_id');
+
+                if ($shouldReturnStock) {
+                    foreach ($lockedOrder->items as $item) {
+                        $productId = (string) ($item->product_id ?? '');
+                        /** @var \App\Models\Product|null $product */
+                        $product = $productId !== '' ? $products->get($productId) : null;
+
+                        if (!$product && $item->product) {
+                            $product = $item->product;
+                        }
+
+                        if (!$product) {
+                            continue;
+                        }
+
+                        $previousStock = (int) $product->stock_quantity;
+                        $newStock = $previousStock + (int) $item->quantity;
+
+                        $product->stock_quantity = $newStock;
+                        $product->save();
+
+                        InventoryMovement::create([
+                            'product_id' => $product->getKey(),
+                            'user_id' => auth()->id(),
+                            'type' => 'in',
+                            'quantity' => $item->quantity,
+                            'previous_stock' => $previousStock,
+                            'new_stock' => $newStock,
+                            'reason' => 'Order ' . $lockedOrder->order_number . ' cancelled (stock returned).',
+                        ]);
+                    }
+                }
+
+                if ($shouldReleaseReservation) {
+                    foreach ($lockedOrder->items as $item) {
+                        $productId = (string) ($item->product_id ?? '');
+                        /** @var \App\Models\Product|null $product */
+                        $product = $productId !== '' ? $products->get($productId) : null;
+
+                        if (!$product && $item->product) {
+                            $product = $item->product;
+                        }
+
+                        if (!$product) {
+                            continue;
+                        }
+
+                        $qty = (int) $item->quantity;
+                        $currentReserved = (int) ($product->reserved_quantity ?? 0);
+                        $product->reserved_quantity = max(0, $currentReserved - $qty);
+                        $product->save();
+                    }
+                }
+
+                $orderStateEngine->cancelOrderLocked(
+                    $lockedOrder,
+                    $data['cancel_reason'],
+                    $note,
+                    auth()->id()
+                );
+            });
+        } catch (\DomainException $e) {
+            return back()->withErrors(['status' => $e->getMessage()]);
+        }
 
         return back()->with('success', 'Order cancelled.');
     }
 
-    public function reopen(Request $request, Order $order)
+    public function reopen(Request $request, Order $order, OrderStateEngine $orderStateEngine)
     {
         $data = $request->validate([
             'note' => 'nullable|string|max:500',
         ]);
 
-        if ($order->status !== 'cancelled') {
-            return back()->withErrors(['status' => 'Only cancelled orders can be reopened.']);
-        }
-
-        if ($order->shipment_status !== 'pending') {
-            return back()->withErrors(['status' => 'Cannot reopen after shipment has started.']);
-        }
-
-        $order->status = 'pending';
-        $order->cancelled_at = null;
-        $order->cancelled_reason = null;
-        $order->shipment_status = 'pending';
-        $order->save();
-
         $note = !empty($data['note'])
             ? 'Reopened: ' . $data['note']
             : 'Order reopened.';
 
-        $this->logStatus($order, 'pending', $note);
+        try {
+            $orderStateEngine->reopenOrder($order, $note, auth()->id());
+        } catch (\DomainException $e) {
+            return back()->withErrors(['status' => $e->getMessage()]);
+        }
 
         return back()->with('success', 'Order reopened.');
     }
@@ -366,8 +380,12 @@ class OrderController extends Controller
         if ($request->query('export') === 'excel' || $request->query('export') === 'pdf') {
             $totalOrders = (clone $query)->count();
             $totalValue = (clone $query)->sum('total_amount');
-            $paymentVerifiedCount = (clone $query)->whereNotNull('payment_verified_at')->count();
-            $paymentUnverifiedCount = max($totalOrders - $paymentVerifiedCount, 0);
+            $paymentPaidCount = (clone $query)->where('payment_status', 'paid')->count();
+            $paymentPendingCount = (clone $query)->where('payment_status', 'pending')->count();
+            $paymentUnpaidCount = (clone $query)->where('payment_status', 'unpaid')->count();
+            $paymentRefundPendingCount = (clone $query)->where('payment_status', 'refund_pending')->count();
+            $paymentPartialRefundCount = (clone $query)->where('payment_status', 'partial_refund')->count();
+            $paymentRefundedCount = (clone $query)->where('payment_status', 'refunded')->count();
 
             $statusRows = (clone $query)
                 ->select('status', DB::raw('count(*) as total'))
@@ -390,8 +408,12 @@ class OrderController extends Controller
                     'rows' => [
                         ['Total Orders', $totalOrders],
                         ['Total Order Value', $totalValue],
-                        ['Payments Verified', $paymentVerifiedCount],
-                        ['Payments Unverified', $paymentUnverifiedCount],
+                        ['Payments Paid', $paymentPaidCount],
+                        ['Payments Pending', $paymentPendingCount],
+                        ['Payments Unpaid', $paymentUnpaidCount],
+                        ['Refund Pending', $paymentRefundPendingCount],
+                        ['Partial Refund', $paymentPartialRefundCount],
+                        ['Refunded', $paymentRefundedCount],
                     ],
                 ],
                 [
@@ -474,8 +496,12 @@ class OrderController extends Controller
             ->groupBy('status')
             ->pluck('total', 'status');
 
-        $paymentVerifiedCount = (clone $query)->whereNotNull('payment_verified_at')->count();
-        $paymentUnverifiedCount = max($totalOrders - $paymentVerifiedCount, 0);
+        $paymentPaidCount = (clone $query)->where('payment_status', 'paid')->count();
+        $paymentPendingCount = (clone $query)->where('payment_status', 'pending')->count();
+        $paymentUnpaidCount = (clone $query)->where('payment_status', 'unpaid')->count();
+        $paymentRefundPendingCount = (clone $query)->where('payment_status', 'refund_pending')->count();
+        $paymentPartialRefundCount = (clone $query)->where('payment_status', 'partial_refund')->count();
+        $paymentRefundedCount = (clone $query)->where('payment_status', 'refunded')->count();
 
         $dailySummary = (clone $query)
             ->selectRaw('date(created_at) as report_date, count(*) as total_orders, sum(total_amount) as total_value')
@@ -487,8 +513,12 @@ class OrderController extends Controller
             'totalOrders' => $totalOrders,
             'totalValue' => $totalValue,
             'statusCounts' => $statusCounts,
-            'paymentVerifiedCount' => $paymentVerifiedCount,
-            'paymentUnverifiedCount' => $paymentUnverifiedCount,
+            'paymentPaidCount' => $paymentPaidCount,
+            'paymentPendingCount' => $paymentPendingCount,
+            'paymentUnpaidCount' => $paymentUnpaidCount,
+            'paymentRefundPendingCount' => $paymentRefundPendingCount,
+            'paymentPartialRefundCount' => $paymentPartialRefundCount,
+            'paymentRefundedCount' => $paymentRefundedCount,
             'dailySummary' => $dailySummary,
             'statuses' => Order::STATUSES,
             'filters' => $request->only(['date_from', 'date_to']),

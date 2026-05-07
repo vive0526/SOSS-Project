@@ -8,7 +8,9 @@
     <div class="admin-card">
         <h3 style="margin-bottom: 12px;">{{ $product->name }}</h3>
         <p style="color:#bfbfbf; margin-bottom: 18px;">
-            Current stock: {{ $product->stock_quantity }}
+            Physical stock: {{ $product->stock_quantity }}
+            | Reserved: {{ (int) ($product->reserved_quantity ?? 0) }}
+            | Available: {{ $product->availableStock() }}
         </p>
 
         @if($errors->any())

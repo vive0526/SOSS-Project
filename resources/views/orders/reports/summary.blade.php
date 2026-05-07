@@ -38,12 +38,28 @@
                 </div>
             </div>
             <div>
-                <div style="color:#bfbfbf; font-size:12px;">Payments Verified</div>
-                <div style="font-size:24px; font-weight:700;">{{ $paymentVerifiedCount }}</div>
+                <div style="color:#bfbfbf; font-size:12px;">Payments Paid</div>
+                <div style="font-size:24px; font-weight:700;">{{ $paymentPaidCount }}</div>
             </div>
             <div>
-                <div style="color:#bfbfbf; font-size:12px;">Payments Unverified</div>
-                <div style="font-size:24px; font-weight:700;">{{ $paymentUnverifiedCount }}</div>
+                <div style="color:#bfbfbf; font-size:12px;">Payments Pending</div>
+                <div style="font-size:24px; font-weight:700;">{{ $paymentPendingCount }}</div>
+            </div>
+            <div>
+                <div style="color:#bfbfbf; font-size:12px;">Payments Unpaid</div>
+                <div style="font-size:24px; font-weight:700;">{{ $paymentUnpaidCount }}</div>
+            </div>
+            <div>
+                <div style="color:#bfbfbf; font-size:12px;">Refund Pending</div>
+                <div style="font-size:24px; font-weight:700;">{{ $paymentRefundPendingCount }}</div>
+            </div>
+            <div>
+                <div style="color:#bfbfbf; font-size:12px;">Partial Refund</div>
+                <div style="font-size:24px; font-weight:700;">{{ $paymentPartialRefundCount }}</div>
+            </div>
+            <div>
+                <div style="color:#bfbfbf; font-size:12px;">Refunded</div>
+                <div style="font-size:24px; font-weight:700;">{{ $paymentRefundedCount }}</div>
             </div>
         </div>
     </div>

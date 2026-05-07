@@ -59,4 +59,17 @@ class CustomerProductController extends Controller
     {
         return view('customer.products.show', compact('product'));
     }
+
+    public function stock(Product $product)
+    {
+        $product->refresh();
+
+        return response()->json([
+            'ok' => true,
+            'product_id' => (string) $product->getKey(),
+            'stock_quantity' => (int) $product->stock_quantity,
+            'reserved_quantity' => (int) ($product->reserved_quantity ?? 0),
+            'available_stock' => (int) $product->availableStock(),
+        ]);
+    }
 }

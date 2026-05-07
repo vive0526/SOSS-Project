@@ -62,9 +62,11 @@ class CustomerCartController extends Controller
             $maintenanceYear = null;
         }
 
-        if ($product->stock_quantity < $data['quantity']) {
+        $availableStock = $product->availableStock();
+
+        if ($availableStock < $data['quantity']) {
             return back()->withErrors([
-                'quantity' => 'Not enough stock available for this product.',
+                'quantity' => 'Only ' . $availableStock . ' unit(s) available.',
             ])->withInput();
         }
 
@@ -73,9 +75,9 @@ class CustomerCartController extends Controller
         $existingQty = $cart[$key]['quantity'] ?? 0;
         $newQty = $existingQty + $data['quantity'];
 
-        if ($product->stock_quantity < $newQty) {
+        if ($availableStock < $newQty) {
             return back()->withErrors([
-                'quantity' => 'You can only add up to ' . $product->stock_quantity . ' unit(s).',
+                'quantity' => 'You can only add up to ' . $availableStock . ' unit(s).',
             ])->withInput();
         }
 
@@ -128,8 +130,10 @@ class CustomerCartController extends Controller
                 ->withErrors(['cart' => 'Product is no longer available.']);
         }
 
-        if ($product->stock_quantity < $data['quantity']) {
-            $message = 'Only ' . $product->stock_quantity . ' unit(s) available.';
+        $availableStock = $product->availableStock();
+
+        if ($availableStock < $data['quantity']) {
+            $message = 'Only ' . $availableStock . ' unit(s) available.';
             if ($request->expectsJson()) {
                 return response()->json([
                     'ok' => false,

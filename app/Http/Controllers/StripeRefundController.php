@@ -4,17 +4,22 @@ namespace App\Http\Controllers;
 
 use App\Models\Order;
 use App\Models\OrderStatusHistory;
+use App\Services\OrderStateEngine;
 use Illuminate\Http\Request;
 use Stripe\Exception\ApiErrorException;
 use Stripe\StripeClient;
 
 class StripeRefundController extends Controller
 {
-    public function store(Request $request, Order $order)
+    public function store(Request $request, Order $order, OrderStateEngine $orderStateEngine)
     {
         $secretKey = (string) config('services.stripe.secret');
         if ($secretKey === '') {
             return back()->withErrors(['refund' => 'Stripe is not configured.']);
+        }
+
+        if (!in_array($order->payment_status, ['paid', 'partial_refund'], true)) {
+            return back()->withErrors(['refund' => 'This order is not eligible for refund (payment status: ' . ($order->payment_status ?? '-') . ').']);
         }
 
         if (!$order->payment_reference) {
@@ -73,6 +78,28 @@ class StripeRefundController extends Controller
             return back()->withErrors(['refund' => 'Stripe refund failed: ' . $e->getMessage()]);
         }
 
+        $expected = (int) round(((float) $order->total_amount) * 100);
+        $amount = (int) ($refund->amount ?? 0);
+        $refundStatus = (string) ($refund->status ?? '');
+
+        $nextPaymentStatus = 'refund_pending';
+        if ($refundStatus === 'succeeded') {
+            $nextPaymentStatus = ($expected > 0 && $amount < $expected) ? 'partial_refund' : 'refunded';
+        }
+
+        try {
+            $orderStateEngine->transitionPaymentStatus($order, $nextPaymentStatus);
+        } catch (\DomainException $e) {
+            // If the refund succeeded in Stripe but our state machine rejected the transition,
+            // keep the Stripe refund record in history for manual review.
+            OrderStatusHistory::create([
+                'order_id' => $order->getKey(),
+                'status' => $order->status,
+                'note' => 'Stripe refund created but local status update failed: ' . $e->getMessage(),
+                'changed_by' => $request->user()?->getKey(),
+            ]);
+        }
+
         OrderStatusHistory::create([
             'order_id' => $order->getKey(),
             'status' => $order->status,
@@ -83,4 +110,3 @@ class StripeRefundController extends Controller
         return back()->with('success', 'Refund requested in Stripe: ' . $refund->id);
     }
 }
-

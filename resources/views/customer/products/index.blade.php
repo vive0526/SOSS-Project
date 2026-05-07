@@ -78,6 +78,7 @@
         @forelse($products as $product)
             @php
                 $displayPrice = $product->price;
+                $availableStock = $product->availableStock();
                 if ((string) $product->category_id === '3' && !empty($product->maintenance_prices)) {
                     $maintenancePrices = $product->maintenance_prices ?? [];
                     if (!empty($maintenancePrices)) {
@@ -100,8 +101,8 @@
                         <span class="customer-badge">
                             {{ $product->category?->name ?? 'Uncategorized' }}
                         </span>
-                        <span class="customer-stock {{ $product->stock_quantity > 0 ? 'is-in' : 'is-out' }}">
-                            {{ $product->stock_quantity > 0 ? $product->stock_quantity . ' in stock' : 'Out of Stock' }}
+                        <span class="customer-stock {{ $availableStock > 0 ? 'is-in' : 'is-out' }}">
+                            {{ $availableStock > 0 ? $availableStock . ' in stock' : 'Out of Stock' }}
                         </span>
                     </div>
                     <h3 class="customer-product__title">{{ $product->name }}</h3>

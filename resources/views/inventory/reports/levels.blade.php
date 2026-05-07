@@ -20,7 +20,9 @@
                 <th>No</th>
                 <th>Product</th>
                 <th>Category</th>
-                <th>Stock Quantity</th>
+                <th>Physical Stock</th>
+                <th>Reserved</th>
+                <th>Available</th>
                 <th>Reorder Level</th>
                 <th>Status</th>
             </tr>
@@ -28,12 +30,14 @@
             <tbody>
             @foreach($products as $index => $product)
                 @php
+                    $reserved = (int) ($product->reserved_quantity ?? 0);
+                    $available = $product->availableStock();
                     $status = 'Normal';
                     $statusClass = 'status-active';
-                    if ($product->stock_quantity <= 0) {
+                    if ($available <= 0) {
                         $status = 'Out of Stock';
                         $statusClass = 'status-inactive';
-                    } elseif ($product->stock_quantity <= $product->reorder_level) {
+                    } elseif ($available <= $product->reorder_level) {
                         $status = 'Low';
                         $statusClass = 'status-low';
                     }
@@ -43,6 +47,8 @@
                     <td>{{ $product->name }}</td>
                     <td>{{ $product->category?->name ?? 'Uncategorized' }}</td>
                     <td>{{ $product->stock_quantity }}</td>
+                    <td>{{ $reserved }}</td>
+                    <td>{{ $available }}</td>
                     <td>{{ $product->reorder_level }}</td>
                     <td><span class="{{ $statusClass }}">{{ $status }}</span></td>
                 </tr>

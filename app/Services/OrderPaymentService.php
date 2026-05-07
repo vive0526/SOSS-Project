@@ -10,6 +10,10 @@ use Illuminate\Support\Facades\DB;
 
 class OrderPaymentService
 {
+    public function __construct(private readonly OrderStateEngine $orderStateEngine)
+    {
+    }
+
     public function verifyPayment(Order $order, ?string $verifiedByUserId = null, ?string $paymentReference = null, ?string $note = null): bool
     {
         return (bool) DB::transaction(function () use ($order, $verifiedByUserId, $paymentReference, $note) {
@@ -98,13 +102,11 @@ class OrderPaymentService
                 return false;
             }
 
-            $lockedOrder->payment_verified_at = now();
-
             if ($paymentReference) {
                 $lockedOrder->payment_reference = $paymentReference;
             }
 
-            $lockedOrder->save();
+            $this->orderStateEngine->transitionPaymentStatusLocked($lockedOrder, 'paid', null, true);
 
             $movementUserId = $verifiedByUserId ?: $lockedOrder->user_id;
 

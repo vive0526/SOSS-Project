@@ -32,7 +32,14 @@
             'delivered' => 'status-delivered',
             default => 'status-low',
         };
-        $paymentClass = $order->payment_verified_at ? 'status-paid' : 'status-unpaid';
+        $paymentClass = match ($order->payment_status) {
+            'paid' => 'status-paid',
+            'pending' => 'status-pending',
+            'refund_pending' => 'status-pending',
+            'partial_refund' => 'status-paid',
+            'refunded' => 'status-paid',
+            default => 'status-unpaid',
+        };
         $totalItems = $order->items->sum('quantity');
         $itemsTotal = $order->items->sum('total_price');
         $isAdmin = auth()->user()->role === 'admin';
@@ -49,7 +56,7 @@
         </div>
         <div>
             <div style="color:#bfbfbf; font-size:12px;">Payment</div>
-            <span class="{{ $paymentClass }}">{{ $order->payment_verified_at ? 'Verified' : 'Unverified' }}</span>
+            <span class="{{ $paymentClass }}">{{ ucwords(str_replace('_', ' ', $order->payment_status ?? 'unpaid')) }}</span>
         </div>
         <div>
             <div style="color:#bfbfbf; font-size:12px;">Shipment</div>
@@ -98,7 +105,12 @@
             <h3 style="margin-bottom: 8px;">Payment Info</h3>
             <p><strong>Method:</strong> {{ $order->payment_method ?? '-' }}</p>
             <p><strong>Reference:</strong> {{ $order->payment_reference ?? '-' }}</p>
-            <p><strong>Verified:</strong> {{ $order->payment_verified_at?->format('Y-m-d H:i') ?? 'No' }}</p>
+            <p><strong>Status:</strong> {{ ucwords(str_replace('_', ' ', $order->payment_status ?? 'unpaid')) }}</p>
+            <p><strong>Paid At:</strong> {{ $order->payment_verified_at?->format('Y-m-d H:i') ?? 'No' }}</p>
+            @if($order->payment_last_failed_at)
+                <p><strong>Last Failed:</strong> {{ $order->payment_last_failed_at->format('Y-m-d H:i') }}</p>
+                <p><strong>Reason:</strong> {{ $order->payment_last_failure_reason ?? '-' }}</p>
+            @endif
         </div>
     </div>
 
@@ -146,7 +158,7 @@
                     <label for="status">Status</label>
                     <select name="status" required>
                         @foreach($statuses as $status)
-                            @if($status !== 'cancelled')
+                            @if($status !== 'cancelled' && ($order->status === $status || $order->canTransitionStatusTo($status)))
                                 <option value="{{ $status }}" {{ $order->status === $status ? 'selected' : '' }}>
                                     {{ ucfirst($status) }}
                                 </option>
@@ -178,11 +190,11 @@
                 @method('PATCH')
                 <button type="submit"
                         class="btn btn-primary"
-                        {{ $order->payment_verified_at || $order->status === 'cancelled' ? 'disabled' : '' }}>
+                        {{ in_array($order->payment_status, ['paid', 'refund_pending', 'partial_refund', 'refunded'], true) || $order->status === 'cancelled' ? 'disabled' : '' }}>
                     @if($order->status === 'cancelled')
                         Payment Cancelled
                     @else
-                        {{ $order->payment_verified_at ? 'Payment Verified' : 'Verify Payment' }}
+                        {{ $order->payment_status === 'paid' ? 'Payment Paid' : 'Mark Payment as Paid' }}
                     @endif
                 </button>
             </form>

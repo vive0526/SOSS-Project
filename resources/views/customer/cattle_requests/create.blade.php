@@ -8,6 +8,7 @@
     @php
         $user = auth()->user();
         $minDate = now()->toDateString();
+        $availableStock = $product->availableStock();
     @endphp
 
     @if(session('success'))
@@ -36,7 +37,7 @@
                 <div><strong>Email:</strong> {{ $user?->email ?? '-' }}</div>
                 <div>
                     <strong>Stock available:</strong>
-                    {{ $product->stock_quantity > 0 ? $product->stock_quantity . ' unit(s)' : 'Out of stock' }}
+                    {{ $availableStock > 0 ? $availableStock . ' unit(s)' : 'Out of stock' }}
                 </div>
             </div>
 
@@ -87,10 +88,10 @@
                                id="quantity"
                                name="quantity"
                                min="1"
-                               max="{{ $product->stock_quantity }}"
+                               max="{{ $availableStock }}"
                                value="{{ old('quantity', 1) }}"
                                required>
-                        <div class="cr-help">Max: {{ max(0, (int) $product->stock_quantity) }} unit(s)</div>
+                        <div class="cr-help">Max: {{ max(0, (int) $availableStock) }} unit(s)</div>
                         @error('quantity')
                             <div class="cr-error">{{ $message }}</div>
                         @enderror
@@ -136,7 +137,7 @@
                 </div>
 
                 <div class="cr-actions">
-                    <button type="submit" class="btn btn-primary" {{ $product->stock_quantity > 0 ? '' : 'disabled' }}>
+                    <button type="submit" class="btn btn-primary" {{ $availableStock > 0 ? '' : 'disabled' }}>
                         Submit request
                     </button>
                     <a class="btn btn-outline" href="{{ route('customer.products.show', $product) }}">Cancel</a>

@@ -53,8 +53,12 @@
                 <label for="payment">Payment</label>
                 <select name="payment">
                     <option value="">All payments</option>
-                    <option value="verified" {{ ($filters['payment'] ?? '') === 'verified' ? 'selected' : '' }}>Verified</option>
-                    <option value="unverified" {{ ($filters['payment'] ?? '') === 'unverified' ? 'selected' : '' }}>Unverified</option>
+                    <option value="paid" {{ in_array(($filters['payment'] ?? ''), ['paid', 'verified'], true) ? 'selected' : '' }}>Paid</option>
+                    <option value="pending" {{ ($filters['payment'] ?? '') === 'pending' ? 'selected' : '' }}>Pending</option>
+                    <option value="unpaid" {{ in_array(($filters['payment'] ?? ''), ['unpaid', 'unverified'], true) ? 'selected' : '' }}>Unpaid</option>
+                    <option value="refund_pending" {{ ($filters['payment'] ?? '') === 'refund_pending' ? 'selected' : '' }}>Refund pending</option>
+                    <option value="partial_refund" {{ ($filters['payment'] ?? '') === 'partial_refund' ? 'selected' : '' }}>Partial refund</option>
+                    <option value="refunded" {{ ($filters['payment'] ?? '') === 'refunded' ? 'selected' : '' }}>Refunded</option>
                 </select>
             </div>
             <div>
@@ -114,7 +118,14 @@
                             'cancelled' => 'status-cancelled',
                             default => 'status-low',
                         };
-                        $paymentClass = $order->payment_verified_at ? 'status-paid' : 'status-unpaid';
+                        $paymentClass = match ($order->payment_status) {
+                            'paid' => 'status-paid',
+                            'pending' => 'status-pending',
+                            'refund_pending' => 'status-pending',
+                            'partial_refund' => 'status-paid',
+                            'refunded' => 'status-paid',
+                            default => 'status-unpaid',
+                        };
                     @endphp
                     <tr>
                         <td>{{ $index + 1 }}</td>
@@ -128,7 +139,7 @@
                         </td>
                         <td>
                             <span class="{{ $paymentClass }}">
-                                {{ $order->payment_verified_at ? 'Verified' : 'Unverified' }}
+                                {{ ucwords(str_replace('_', ' ', $order->payment_status ?? 'unpaid')) }}
                             </span>
                         </td>
                         <td>{{ $order->tracking_number ?? '-' }}</td>

@@ -29,10 +29,34 @@ class Order extends Model
         'cancelled',
     ];
 
+    /**
+     * Allowed forward-only fulfillment transitions for staff/admin updates.
+     *
+     * Cancellation and reopening are handled via dedicated actions.
+     *
+     * @var array<string, array<int, string>>
+     */
+    public const STATUS_TRANSITIONS = [
+        'pending' => ['processing'],
+        'processing' => ['shipped'],
+        'shipped' => ['delivered'],
+        'delivered' => [],
+        'cancelled' => [],
+    ];
+
     public const SHIPMENT_STATUSES = [
         'pending',
         'shipped',
         'delivered',
+    ];
+
+    public const PAYMENT_STATUSES = [
+        'unpaid',
+        'pending',
+        'paid',
+        'refund_pending',
+        'refunded',
+        'partial_refund',
     ];
 
     protected $fillable = [
@@ -46,6 +70,9 @@ class Order extends Model
         'shipping_fee',
         'payment_method',
         'payment_reference',
+        'payment_status',
+        'payment_last_failed_at',
+        'payment_last_failure_reason',
         'payment_verified_at',
         'reserved_at',
         'reservation_expires_at',
@@ -63,6 +90,7 @@ class Order extends Model
 
     protected $casts = [
         'payment_verified_at' => 'datetime',
+        'payment_last_failed_at' => 'datetime',
         'reserved_at' => 'datetime',
         'reservation_expires_at' => 'datetime',
         'shipping_confirmed_at' => 'datetime',
@@ -104,5 +132,25 @@ class Order extends Model
     public function isPaymentVerified(): bool
     {
         return $this->payment_verified_at !== null;
+    }
+
+    public function isPaymentAcceptableForFulfillment(): bool
+    {
+        if ($this->payment_method === 'cash_on_delivery') {
+            return true;
+        }
+
+        return $this->payment_status === 'paid';
+    }
+
+    public function canTransitionStatusTo(string $nextStatus): bool
+    {
+        if (!in_array($nextStatus, self::STATUSES, true)) {
+            return false;
+        }
+
+        $allowed = self::STATUS_TRANSITIONS[$this->status] ?? [];
+
+        return in_array($nextStatus, $allowed, true);
     }
 }

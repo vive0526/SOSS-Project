@@ -58,7 +58,7 @@
             <div class="customer-product-detail__price" data-price-display>
                 {{ $displayPrice !== null ? 'RM ' . number_format((float) $displayPrice, 2) : 'N/A' }}
             </div>
-            <div class="customer-product-detail__stock {{ $availableStock > 0 ? 'is-in' : 'is-out' }}">
+            <div class="customer-product-detail__stock {{ $availableStock > 0 ? 'is-in' : 'is-out' }}" data-available-stock>
                 {{ $availableStock > 0 ? $availableStock . ' in stock' : 'Out of Stock' }}
             </div>
             <p class="customer-product-detail__desc">{{ $product->description }}</p>
@@ -121,8 +121,9 @@
                                max="{{ $availableStock }}"
                                value="{{ old('quantity', 1) }}"
                                style="width:90px;"
+                               data-qty-input
                                {{ $availableStock > 0 ? '' : 'disabled' }}>
-                        <button type="submit" class="btn btn-primary"
+                        <button type="submit" class="btn btn-primary" data-add-to-cart-btn
                                 {{ $availableStock > 0 ? '' : 'disabled' }}>
                             Add to Cart
                         </button>
@@ -132,6 +133,54 @@
             @endif
         </div>
     </div>
+
+    @if(!$isCattle)
+        <script>
+            (function () {
+                const stockEl = document.querySelector('[data-available-stock]');
+                const qtyInput = document.querySelector('[data-qty-input]');
+                const addBtn = document.querySelector('[data-add-to-cart-btn]');
+                const url = "{{ route('customer.products.stock', $product) }}";
+                if (!stockEl || !qtyInput || !addBtn || !url) return;
+
+                const setUi = (available) => {
+                    const n = Number(available);
+                    const safe = Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
+
+                    stockEl.textContent = safe > 0 ? (safe + ' in stock') : 'Out of Stock';
+                    stockEl.classList.toggle('is-in', safe > 0);
+                    stockEl.classList.toggle('is-out', safe <= 0);
+
+                    qtyInput.max = String(safe);
+                    if (safe <= 0) {
+                        qtyInput.disabled = true;
+                        addBtn.disabled = true;
+                    } else {
+                        qtyInput.disabled = false;
+                        addBtn.disabled = false;
+                        const current = parseInt(qtyInput.value || '1', 10);
+                        if (!Number.isFinite(current) || current < 1) qtyInput.value = '1';
+                        if (current > safe) qtyInput.value = String(safe);
+                    }
+                };
+
+                const poll = async () => {
+                    try {
+                        const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+                        if (!res.ok) return;
+                        const data = await res.json();
+                        if (!data || data.ok !== true) return;
+                        setUi(data.available_stock);
+                    } catch (e) {
+                        // ignore
+                    }
+                };
+
+                poll();
+                setInterval(poll, 7000);
+            })();
+        </script>
+    @endif
 
     @if(!$isCattle && (string) $product->category_id === '3' && !empty($maintenancePrices))
         <script>

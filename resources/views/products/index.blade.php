@@ -36,12 +36,18 @@
                     <th>Category</th>
                     <th>Price</th>
                     <th>Maintenance</th>
-                    <th>Stock Quantity</th>
+                    <th>Physical</th>
+                    <th>Reserved</th>
+                    <th>Available</th>
                     <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
                 @foreach($products as $index => $product)
+                @php
+                    $reserved = (int) ($product->reserved_quantity ?? 0);
+                    $available = $product->availableStock();
+                @endphp
                 <tr>
                     <td>{{ $index + 1 }}</td>
                     <td>
@@ -96,6 +102,8 @@
                         @endif
                     </td>
                     <td>{{ $product->stock_quantity }}</td>
+                    <td>{{ $reserved }}</td>
+                    <td>{{ $available }}</td>
                     <td>
                         <a href="{{ route('products.edit', $product) }}" class="btn-admin btn-edit">Edit</a>
                         <form action="{{ route('products.destroy', $product) }}" method="POST" style="display:inline;">
