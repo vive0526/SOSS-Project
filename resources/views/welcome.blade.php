@@ -32,7 +32,7 @@
         <a href="{{ $primaryCtaUrl }}" class="btn btn-outline welcome-shop">
             {{ $primaryCtaLabel }}
         </a>
-    </div>0
+    </div>
 </header>
 
 <main>

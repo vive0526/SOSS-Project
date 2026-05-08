@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Order;
+use App\Models\OrderRefund;
 use App\Models\OrderStatusHistory;
 use App\Services\OrderPaymentService;
 use App\Services\OrderStateEngine;
@@ -156,19 +157,39 @@ class StripeWebhookController extends Controller
             if ($paymentIntentId) {
                 $order = Order::where('payment_reference', $paymentIntentId)->first();
                 if ($order) {
-                    $expected = (int) round(((float) $order->total_amount) * 100);
                     $amount = (int) ($refund->amount ?? 0);
                     $refundStatus = (string) ($refund->status ?? '');
 
                     try {
-                        if ($refundStatus === 'succeeded') {
-                            $next = ($expected > 0 && $amount < $expected) ? 'partial_refund' : 'refunded';
-                            $orderStateEngine->transitionPaymentStatus($order, $next);
-                        } elseif (in_array($refundStatus, ['pending', 'requires_action'], true)) {
-                            $orderStateEngine->transitionPaymentStatus($order, 'refund_pending');
-                        } elseif (in_array($refundStatus, ['failed', 'canceled'], true)) {
-                            $orderStateEngine->transitionPaymentStatus($order, 'paid', 'refund_' . $refundStatus, true);
+                        $refundId = (string) ($refund->id ?? '');
+                        if ($refundId !== '') {
+                            OrderRefund::query()->updateOrCreate(
+                                [
+                                    'provider' => 'stripe',
+                                    'provider_refund_id' => $refundId,
+                                ],
+                                [
+                                    'order_id' => $order->getKey(),
+                                    'provider_payment_intent_id' => (string) ($refund->payment_intent ?? '') ?: null,
+                                    'amount_cents' => $amount,
+                                    'currency' => (string) ($refund->currency ?? 'myr') ?: 'myr',
+                                    'reason' => (string) ($refund->reason ?? '') ?: null,
+                                    'status' => $refundStatus !== '' ? $refundStatus : 'pending',
+                                    'requested_by' => null,
+                                    'processed_at' => $refundStatus === 'succeeded' ? now() : null,
+                                    'provider_payload' => [
+                                        'id' => $refundId,
+                                        'status' => $refundStatus,
+                                        'amount' => $amount,
+                                        'currency' => (string) ($refund->currency ?? 'myr'),
+                                        'payment_intent' => $refund->payment_intent ?? null,
+                                        'charge' => $refund->charge ?? null,
+                                    ],
+                                ]
+                            );
                         }
+
+                        $orderStateEngine->recalculateRefundPaymentStatus($order);
                     } catch (\DomainException $e) {
                         Log::warning('Stripe refund webhook received but local payment status transition failed.', [
                             'order_id' => $order->getKey(),

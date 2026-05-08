@@ -61,31 +61,14 @@ class CustomerOrderController extends Controller
     {
         $this->authorizeCustomer($order);
 
-        if ($order->status === 'cancelled') {
-            return back()->with('success', 'Order is already cancelled.');
-        }
-
-        if ($order->status !== 'pending' || $order->shipment_status !== 'pending') {
-            return back()->withErrors(['status' => 'This order can no longer be cancelled.']);
-        }
-
         $data = $request->validate([
             'cancel_reason' => 'required|string|max:500',
         ]);
 
-        $shouldReturnStock = $order->payment_status === 'paid' && $order->shipment_status === 'pending';
-        $shouldReleaseReservation = $order->payment_status !== 'paid' && $order->reserved_at !== null;
-        $order->load('items.product');
-
-        $note = 'Cancelled by customer: ' . $data['cancel_reason'];
-        if ($shouldReturnStock) {
-            $note .= ' Stock returned.';
-        }
-        if ($shouldReleaseReservation) {
-            $note .= ' Stock reservation released.';
-        }
         try {
-            DB::transaction(function () use ($order, $data, $shouldReturnStock, $shouldReleaseReservation, $note, $orderStateEngine) {
+            $didCancel = false;
+
+            DB::transaction(function () use ($order, $data, $orderStateEngine, &$didCancel) {
                 /** @var \App\Models\Order|null $lockedOrder */
                 $lockedOrder = Order::query()
                     ->whereKey($order->getKey())
@@ -96,7 +79,38 @@ class CustomerOrderController extends Controller
                     throw new \RuntimeException('Order not found.');
                 }
 
+                if ($lockedOrder->user_id !== auth()->id()) {
+                    abort(403);
+                }
+
+                if ($lockedOrder->status === 'cancelled') {
+                    return;
+                }
+
+                if ($lockedOrder->status !== 'pending' || $lockedOrder->shipment_status !== 'pending') {
+                    throw new \DomainException('This order can no longer be cancelled.');
+                }
+
                 $lockedOrder->load('items.product');
+
+                $shouldReturnStock = $lockedOrder->payment_status === 'paid' && $lockedOrder->shipment_status === 'pending';
+                $shouldReleaseReservation = $lockedOrder->payment_status !== 'paid' && $lockedOrder->reserved_at !== null;
+
+                $note = 'Cancelled by customer: ' . $data['cancel_reason'];
+                if ($shouldReturnStock) {
+                    $note .= ' Stock returned.';
+                }
+                if ($shouldReleaseReservation) {
+                    $note .= ' Stock reservation released.';
+                }
+
+                // Validate cancellation rules before touching stock/reservations.
+                $orderStateEngine->cancelOrderLocked(
+                    $lockedOrder,
+                    $data['cancel_reason'],
+                    $note,
+                    auth()->id()
+                );
 
                 $productIds = collect($lockedOrder->items)->pluck('product_id')->filter()->unique()->values()->all();
                 $products = Product::query()
@@ -159,18 +173,17 @@ class CustomerOrderController extends Controller
                     }
                 }
 
-                $orderStateEngine->cancelOrderLocked(
-                    $lockedOrder,
-                    $data['cancel_reason'],
-                    $note,
-                    auth()->id()
-                );
+                $didCancel = true;
             });
         } catch (\DomainException $e) {
             return back()->withErrors(['status' => $e->getMessage()]);
         }
 
-        return back()->with('success', 'Order cancelled.');
+        if (!empty($didCancel)) {
+            return back()->with('success', 'Order cancelled.');
+        }
+
+        return back()->with('success', 'Order is already cancelled.');
     }
 
     private function authorizeCustomer(Order $order): void

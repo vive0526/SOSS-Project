@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Order;
+use App\Models\OrderRefund;
 use App\Models\OrderStatusHistory;
 use Illuminate\Support\Facades\DB;
 
@@ -22,6 +23,13 @@ class OrderStateEngine
         'partial_refund' => ['refund_pending', 'refunded'],
         'refunded' => [],
     ];
+
+    private const REFUND_PENDING_STATUSES = [
+        'pending',
+        'requires_action',
+    ];
+
+    private const REFUND_SUCCESS_STATUS = 'succeeded';
 
     /**
      * Transition fulfillment status (orders.status) with validation + history logging.
@@ -169,6 +177,79 @@ class OrderStateEngine
 
             $this->transitionPaymentStatusLocked($locked, $nextStatus, $failureReason, $clearFailure);
         });
+    }
+
+    /**
+     * Recalculate payment_status for refund-related states by summing refund records.
+     * This enables multiple partial refunds to correctly reach refunded.
+     */
+    public function recalculateRefundPaymentStatus(Order $order): void
+    {
+        DB::transaction(function () use ($order) {
+            /** @var \App\Models\Order|null $locked */
+            $locked = Order::query()->whereKey($order->getKey())->lockForUpdate()->first();
+            if (!$locked) {
+                throw new \RuntimeException('Order not found.');
+            }
+
+            $this->recalculateRefundPaymentStatusLocked($locked);
+        });
+    }
+
+    public function recalculateRefundPaymentStatusLocked(Order $lockedOrder): void
+    {
+        $current = (string) ($lockedOrder->payment_status ?: 'unpaid');
+        if (!in_array($current, ['paid', 'refund_pending', 'partial_refund', 'refunded'], true)) {
+            return;
+        }
+
+        $refundableTotalCents = $this->getRefundableTotalCents($lockedOrder);
+
+        $refundedSucceededCents = (int) OrderRefund::query()
+            ->where('order_id', $lockedOrder->getKey())
+            ->where('status', self::REFUND_SUCCESS_STATUS)
+            ->sum('amount_cents');
+
+        $hasPendingRefund = OrderRefund::query()
+            ->where('order_id', $lockedOrder->getKey())
+            ->whereIn('status', self::REFUND_PENDING_STATUSES)
+            ->exists();
+
+        $derived = self::deriveRefundPaymentStatus($current, $refundableTotalCents, $refundedSucceededCents, $hasPendingRefund);
+        if ($derived === null || $derived === $current) {
+            return;
+        }
+
+        $this->transitionPaymentStatusLocked($lockedOrder, $derived, null, true);
+    }
+
+    public static function deriveRefundPaymentStatus(string $currentStatus, int $refundableTotalCents, int $refundedSucceededCents, bool $hasPendingRefund): ?string
+    {
+        if (!in_array($currentStatus, ['paid', 'refund_pending', 'partial_refund', 'refunded'], true)) {
+            return null;
+        }
+
+        if ($refundedSucceededCents > 0) {
+            if ($refundableTotalCents > 0 && $refundedSucceededCents >= $refundableTotalCents) {
+                return 'refunded';
+            }
+
+            return 'partial_refund';
+        }
+
+        if ($hasPendingRefund) {
+            return 'refund_pending';
+        }
+
+        return 'paid';
+    }
+
+    private function getRefundableTotalCents(Order $order): int
+    {
+        $total = (float) ($order->total_amount ?? 0);
+        $shippingFee = (float) ($order->shipping_fee ?? 0);
+
+        return (int) round(($total + $shippingFee) * 100);
     }
 
     public function transitionPaymentStatusLocked(Order $lockedOrder, string $nextStatus, ?string $failureReason = null, bool $clearFailure = true): void

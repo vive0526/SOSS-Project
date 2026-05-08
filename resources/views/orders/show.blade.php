@@ -43,6 +43,17 @@
         $totalItems = $order->items->sum('quantity');
         $itemsTotal = $order->items->sum('total_price');
         $isAdmin = auth()->user()->role === 'admin';
+        $isStaff = auth()->user()->role === 'staff';
+        // Shipping starts once shipment_status reaches "shipped" (and includes "delivered").
+        $shipmentStarted = in_array($order->shipment_status, ['shipped', 'delivered'], true);
+        $lockShippingDetails = $isStaff && $shipmentStarted;
+        $allowedShipmentStatuses = match ($order->shipment_status) {
+            'pending' => ['pending', 'shipped'],
+            'shipped' => ['shipped', 'delivered'],
+            'delivered' => ['delivered'],
+            default => $shipmentStatuses,
+        };
+        $canCancelOrder = in_array($order->status, ['pending', 'processing'], true) && $order->shipment_status === 'pending';
     @endphp
 
     <div class="admin-card" style="display:flex; gap:20px; flex-wrap:wrap; align-items:center;">
@@ -235,33 +246,43 @@
                     <label for="shipment_status">Shipment Status</label>
                     <select name="shipment_status" required>
                         @foreach($shipmentStatuses as $shipmentStatus)
+                            @continue(!in_array($shipmentStatus, $allowedShipmentStatuses, true))
                             <option value="{{ $shipmentStatus }}"
                                 {{ $order->shipment_status === $shipmentStatus ? 'selected' : '' }}>
                                 {{ ucfirst($shipmentStatus) }}
                             </option>
                         @endforeach
                     </select>
+                    @if($lockShippingDetails)
+                        <p style="margin:6px 0 0; color:#bfbfbf; font-size:12px;">
+                            Shipping details are locked after shipment starts (admin only).
+                        </p>
+                    @endif
                     <label for="tracking_number">Tracking Number</label>
-                    <input type="text" name="tracking_number" value="{{ $order->tracking_number }}">
+                    <input type="text" name="tracking_number" value="{{ $order->tracking_number }}" {{ $lockShippingDetails ? 'readonly' : '' }}>
                     <label for="shipping_name">Shipping Name</label>
-                    <input type="text" name="shipping_name" value="{{ $order->shipping_name }}">
+                    <input type="text" name="shipping_name" value="{{ $order->shipping_name }}" {{ $lockShippingDetails ? 'readonly' : '' }}>
                     <label for="shipping_phone">Shipping Phone</label>
-                    <input type="text" name="shipping_phone" value="{{ $order->shipping_phone }}">
+                    <input type="text" name="shipping_phone" value="{{ $order->shipping_phone }}" {{ $lockShippingDetails ? 'readonly' : '' }}>
                     <label for="shipping_address">Shipping Address</label>
-                    <textarea name="shipping_address">{{ $order->shipping_address }}</textarea>
+                    <textarea name="shipping_address" {{ $lockShippingDetails ? 'readonly' : '' }}>{{ $order->shipping_address }}</textarea>
                     <label for="shipping_city">City</label>
-                    <input type="text" name="shipping_city" value="{{ $order->shipping_city }}">
+                    <input type="text" name="shipping_city" value="{{ $order->shipping_city }}" {{ $lockShippingDetails ? 'readonly' : '' }}>
                     <label for="shipping_state">State</label>
-                    <input type="text" name="shipping_state" value="{{ $order->shipping_state }}">
+                    <input type="text" name="shipping_state" value="{{ $order->shipping_state }}" {{ $lockShippingDetails ? 'readonly' : '' }}>
                     <label for="shipping_postcode">Postcode</label>
-                    <input type="text" name="shipping_postcode" value="{{ $order->shipping_postcode }}">
+                    <input type="text" name="shipping_postcode" value="{{ $order->shipping_postcode }}" {{ $lockShippingDetails ? 'readonly' : '' }}>
                     <label for="shipping_country">Country</label>
-                    <input type="text" name="shipping_country" value="{{ $order->shipping_country }}">
-                    @if(!$order->shipping_confirmed_at)
+                    <input type="text" name="shipping_country" value="{{ $order->shipping_country }}" {{ $lockShippingDetails ? 'readonly' : '' }}>
+                    @if(!$order->shipping_confirmed_at && !$lockShippingDetails)
                         <label style="display:flex; gap:8px; align-items:center;">
                             <input type="checkbox" name="confirm_shipping" value="1">
                             Confirm shipping address
                         </label>
+                    @elseif(!$order->shipping_confirmed_at && $lockShippingDetails)
+                        <p style="margin-top:10px; color:#bfbfbf; font-size:12px;">
+                            Address confirmation is locked after shipment starts (admin only).
+                        </p>
                     @else
                         <p>Address confirmed on {{ $order->shipping_confirmed_at->format('Y-m-d H:i') }}.</p>
                     @endif
@@ -273,6 +294,8 @@
             <h3 style="margin-bottom: 12px;">Cancel Order</h3>
             @if($order->status === 'cancelled')
                 <p>This order is already cancelled.</p>
+            @elseif(!$canCancelOrder)
+                <p>This order can no longer be cancelled (shipping already started or order completed).</p>
             @else
                 <form method="POST" action="{{ route('orders.cancel', $order) }}">
                     @csrf
@@ -298,6 +321,52 @@
             @endif
         </div>
     </div>
+
+    @if($isAdmin && in_array($order->payment_method, ['stripe_card', 'stripe_fpx'], true))
+        <div class="admin-card">
+            <h3 style="margin-bottom: 12px;">Refund History</h3>
+            @php
+                $refundedTotalCents = $order->refunds->where('status', 'succeeded')->sum('amount_cents');
+            @endphp
+            <p style="margin-bottom: 12px;">
+                <strong>Total Refunded (succeeded):</strong>
+                RM {{ number_format(((int) $refundedTotalCents) / 100, 2) }}
+            </p>
+
+            @if($order->refunds->isEmpty())
+                <p>No refunds recorded.</p>
+            @else
+                <table>
+                    <thead>
+                        <tr>
+                            <th>No</th>
+                            <th>Provider</th>
+                            <th>Refund ID</th>
+                            <th>Status</th>
+                            <th>Amount</th>
+                            <th>Reason</th>
+                            <th>Requested By</th>
+                            <th>Created</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($order->refunds as $index => $refund)
+                            <tr>
+                                <td>{{ $index + 1 }}</td>
+                                <td>{{ $refund->provider }}</td>
+                                <td>{{ $refund->provider_refund_id }}</td>
+                                <td>{{ ucwords(str_replace('_', ' ', $refund->status)) }}</td>
+                                <td>RM {{ number_format(((int) $refund->amount_cents) / 100, 2) }}</td>
+                                <td>{{ $refund->reason ?? '-' }}</td>
+                                <td>{{ $refund->requestedBy?->name ?? '-' }}</td>
+                                <td>{{ $refund->created_at?->format('Y-m-d H:i') ?? '-' }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            @endif
+        </div>
+    @endif
 
     <div class="admin-card">
         <h3 style="margin-bottom: 12px;">Status History</h3>

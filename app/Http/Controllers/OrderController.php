@@ -84,7 +84,7 @@ class OrderController extends Controller
 
     public function show(Order $order)
     {
-        $order->load(['customer', 'items.product', 'statusHistories.changedBy']);
+        $order->load(['customer', 'items.product', 'statusHistories.changedBy', 'refunds.requestedBy']);
 
         return view('orders.show', [
             'order' => $order,
@@ -190,6 +190,9 @@ class OrderController extends Controller
             return back()->withErrors(['shipment_status' => 'Cannot update shipment for a cancelled order.']);
         }
 
+        $role = $request->user()?->role;
+        $isAdmin = $role === 'admin';
+
         $data = $request->validate([
             'shipment_status' => 'required|in:' . implode(',', Order::SHIPMENT_STATUSES),
             'tracking_number' => 'nullable|string|max:120',
@@ -203,20 +206,102 @@ class OrderController extends Controller
             'confirm_shipping' => 'nullable|boolean',
         ]);
 
-        if ($order->payment_status !== 'paid' && $data['shipment_status'] !== 'pending') {
-            return back()->withErrors(['shipment_status' => 'Verify payment before shipping this order.']);
+        $currentShipmentStatus = (string) ($order->shipment_status ?: 'pending');
+        $nextShipmentStatus = (string) $data['shipment_status'];
+
+        $allowedShipmentTransitions = [
+            'pending' => ['shipped'],
+            'shipped' => ['delivered'],
+            'delivered' => [],
+        ];
+
+        if ($currentShipmentStatus !== $nextShipmentStatus) {
+            $allowedNext = $allowedShipmentTransitions[$currentShipmentStatus] ?? [];
+            if (!in_array($nextShipmentStatus, $allowedNext, true)) {
+                return back()->withErrors([
+                    'shipment_status' => 'Invalid shipment status transition: ' . $currentShipmentStatus . ' -> ' . $nextShipmentStatus . '.',
+                ]);
+            }
+        }
+
+        // Shipping is considered started once shipment_status reaches "shipped"
+        // (and remains started for "delivered").
+        $shipmentAlreadyStarted = in_array($currentShipmentStatus, ['shipped', 'delivered'], true);
+        if ($shipmentAlreadyStarted && !$isAdmin) {
+            $normalize = static function ($value) {
+                if (is_string($value)) {
+                    $value = trim($value);
+                }
+
+                return $value === '' ? null : $value;
+            };
+
+            $attemptedDetailsChange = false;
+            $detailFields = [
+                'tracking_number',
+                'shipping_name',
+                'shipping_phone',
+                'shipping_address',
+                'shipping_city',
+                'shipping_state',
+                'shipping_postcode',
+                'shipping_country',
+            ];
+
+            foreach ($detailFields as $field) {
+                if (!array_key_exists($field, $data)) {
+                    continue;
+                }
+
+                $requested = $normalize($data[$field]);
+                $current = $normalize($order->{$field});
+
+                if ($requested !== $current) {
+                    $attemptedDetailsChange = true;
+                    break;
+                }
+            }
+
+            $attemptedConfirmShipping = $request->boolean('confirm_shipping') && !$order->shipping_confirmed_at;
+
+            if ($attemptedDetailsChange || $attemptedConfirmShipping) {
+                return back()->withErrors([
+                    'shipment_status' => 'Only admin can update tracking/shipping details after shipment has started.',
+                ]);
+            }
+        }
+
+        if (!$order->isPaymentAcceptableForFulfillment() && $data['shipment_status'] !== 'pending') {
+            return back()->withErrors(['shipment_status' => 'Verify payment before shipping this order (Cash on Delivery orders are allowed).']);
         }
 
         $statusChanged = $order->shipment_status !== $data['shipment_status'];
         $order->shipment_status = $data['shipment_status'];
-        $order->tracking_number = $data['tracking_number'] ?: null;
-        $order->shipping_name = $data['shipping_name'] ?? $order->shipping_name;
-        $order->shipping_phone = $data['shipping_phone'] ?? $order->shipping_phone;
-        $order->shipping_address = $data['shipping_address'] ?? $order->shipping_address;
-        $order->shipping_city = $data['shipping_city'] ?? $order->shipping_city;
-        $order->shipping_state = $data['shipping_state'] ?? $order->shipping_state;
-        $order->shipping_postcode = $data['shipping_postcode'] ?? $order->shipping_postcode;
-        $order->shipping_country = $data['shipping_country'] ?? $order->shipping_country;
+
+        if (array_key_exists('tracking_number', $data)) {
+            $order->tracking_number = $data['tracking_number'] ?: null;
+        }
+        if (array_key_exists('shipping_name', $data)) {
+            $order->shipping_name = $data['shipping_name'];
+        }
+        if (array_key_exists('shipping_phone', $data)) {
+            $order->shipping_phone = $data['shipping_phone'];
+        }
+        if (array_key_exists('shipping_address', $data)) {
+            $order->shipping_address = $data['shipping_address'];
+        }
+        if (array_key_exists('shipping_city', $data)) {
+            $order->shipping_city = $data['shipping_city'];
+        }
+        if (array_key_exists('shipping_state', $data)) {
+            $order->shipping_state = $data['shipping_state'];
+        }
+        if (array_key_exists('shipping_postcode', $data)) {
+            $order->shipping_postcode = $data['shipping_postcode'];
+        }
+        if (array_key_exists('shipping_country', $data)) {
+            $order->shipping_country = $data['shipping_country'];
+        }
 
         if ($request->boolean('confirm_shipping') && !$order->shipping_confirmed_at) {
             $order->shipping_confirmed_at = now();
@@ -241,24 +326,10 @@ class OrderController extends Controller
             'cancel_reason' => 'required|string|max:500',
         ]);
 
-        if ($order->status === 'cancelled') {
-            return back()->with('success', 'Order is already cancelled.');
-        }
-
-        $shouldReturnStock = $order->payment_status === 'paid' && $order->shipment_status === 'pending';
-        $shouldReleaseReservation = $order->payment_status !== 'paid' && $order->reserved_at !== null;
-        $order->load('items.product');
-
-        $note = 'Cancelled: ' . $data['cancel_reason'];
-        if ($shouldReturnStock) {
-            $note .= ' Stock returned.';
-        }
-        if ($shouldReleaseReservation) {
-            $note .= ' Stock reservation released.';
-        }
-
         try {
-            DB::transaction(function () use ($order, $shouldReturnStock, $shouldReleaseReservation, $data, $note, $orderStateEngine) {
+            $didCancel = false;
+
+            DB::transaction(function () use ($order, $data, $orderStateEngine, &$didCancel) {
                 /** @var \App\Models\Order|null $lockedOrder */
                 $lockedOrder = Order::query()
                     ->whereKey($order->getKey())
@@ -269,7 +340,30 @@ class OrderController extends Controller
                     throw new \RuntimeException('Order not found.');
                 }
 
+                if ($lockedOrder->status === 'cancelled') {
+                    return;
+                }
+
                 $lockedOrder->load('items.product');
+
+                $shouldReturnStock = $lockedOrder->payment_status === 'paid' && $lockedOrder->shipment_status === 'pending';
+                $shouldReleaseReservation = $lockedOrder->payment_status !== 'paid' && $lockedOrder->reserved_at !== null;
+
+                $note = 'Cancelled: ' . $data['cancel_reason'];
+                if ($shouldReturnStock) {
+                    $note .= ' Stock returned.';
+                }
+                if ($shouldReleaseReservation) {
+                    $note .= ' Stock reservation released.';
+                }
+
+                // Validate cancellation rules before touching stock/reservations.
+                $orderStateEngine->cancelOrderLocked(
+                    $lockedOrder,
+                    $data['cancel_reason'],
+                    $note,
+                    auth()->id()
+                );
 
                 $productIds = collect($lockedOrder->items)->pluck('product_id')->filter()->unique()->values()->all();
                 $products = Product::query()
@@ -332,18 +426,17 @@ class OrderController extends Controller
                     }
                 }
 
-                $orderStateEngine->cancelOrderLocked(
-                    $lockedOrder,
-                    $data['cancel_reason'],
-                    $note,
-                    auth()->id()
-                );
+                $didCancel = true;
             });
         } catch (\DomainException $e) {
             return back()->withErrors(['status' => $e->getMessage()]);
         }
 
-        return back()->with('success', 'Order cancelled.');
+        if (!empty($didCancel)) {
+            return back()->with('success', 'Order cancelled.');
+        }
+
+        return back()->with('success', 'Order is already cancelled.');
     }
 
     public function reopen(Request $request, Order $order, OrderStateEngine $orderStateEngine)

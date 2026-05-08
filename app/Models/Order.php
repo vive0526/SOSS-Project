@@ -129,6 +129,11 @@ class Order extends Model
         return $this->hasMany(OrderStatusHistory::class, 'order_id', 'order_id')->orderBy('created_at');
     }
 
+    public function refunds(): HasMany
+    {
+        return $this->hasMany(OrderRefund::class, 'order_id', 'order_id')->orderBy('created_at');
+    }
+
     public function isPaymentVerified(): bool
     {
         return $this->payment_verified_at !== null;

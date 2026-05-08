@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Order;
+use App\Models\OrderRefund;
 use App\Models\OrderStatusHistory;
 use App\Services\OrderStateEngine;
 use Illuminate\Http\Request;
@@ -57,6 +58,24 @@ class StripeRefundController extends Controller
             return back()->withErrors(['refund' => 'Unsupported payment reference format.']);
         }
 
+        $refundableTotalCents = (int) round((((float) ($order->total_amount ?? 0)) + ((float) ($order->shipping_fee ?? 0))) * 100);
+        $alreadyRefundedCents = (int) OrderRefund::query()
+            ->where('order_id', $order->getKey())
+            ->where('status', 'succeeded')
+            ->sum('amount_cents');
+        $remainingCents = max(0, $refundableTotalCents - $alreadyRefundedCents);
+
+        if ($refundableTotalCents > 0 && $alreadyRefundedCents >= $refundableTotalCents) {
+            return back()->withErrors(['refund' => 'This order is already fully refunded.']);
+        }
+
+        if (!empty($data['amount'])) {
+            $requestedCents = (int) round(((float) $data['amount']) * 100);
+            if ($remainingCents > 0 && $requestedCents > $remainingCents) {
+                return back()->withErrors(['refund' => 'Refund amount exceeds remaining refundable amount.']);
+            }
+        }
+
         $params = [];
         if ($paymentIntentId) {
             $params['payment_intent'] = $paymentIntentId;
@@ -78,24 +97,45 @@ class StripeRefundController extends Controller
             return back()->withErrors(['refund' => 'Stripe refund failed: ' . $e->getMessage()]);
         }
 
-        $expected = (int) round(((float) $order->total_amount) * 100);
         $amount = (int) ($refund->amount ?? 0);
         $refundStatus = (string) ($refund->status ?? '');
 
-        $nextPaymentStatus = 'refund_pending';
-        if ($refundStatus === 'succeeded') {
-            $nextPaymentStatus = ($expected > 0 && $amount < $expected) ? 'partial_refund' : 'refunded';
+        $refundId = (string) ($refund->id ?? '');
+        if ($refundId !== '') {
+            OrderRefund::query()->updateOrCreate(
+                [
+                    'provider' => 'stripe',
+                    'provider_refund_id' => $refundId,
+                ],
+                [
+                    'order_id' => $order->getKey(),
+                    'provider_payment_intent_id' => (string) ($refund->payment_intent ?? ($paymentIntentId ?? '')) ?: null,
+                    'amount_cents' => $amount,
+                    'currency' => (string) ($refund->currency ?? 'myr') ?: 'myr',
+                    'reason' => (string) ($refund->reason ?? ($data['reason'] ?? '')) ?: null,
+                    'status' => $refundStatus !== '' ? $refundStatus : 'pending',
+                    'requested_by' => $request->user()?->getKey(),
+                    'processed_at' => $refundStatus === 'succeeded' ? now() : null,
+                    'provider_payload' => [
+                        'id' => $refundId,
+                        'status' => $refundStatus,
+                        'amount' => $amount,
+                        'currency' => (string) ($refund->currency ?? 'myr'),
+                        'payment_intent' => $refund->payment_intent ?? $paymentIntentId,
+                        'charge' => $refund->charge ?? $chargeId,
+                    ],
+                ]
+            );
         }
 
         try {
-            $orderStateEngine->transitionPaymentStatus($order, $nextPaymentStatus);
+            $orderStateEngine->recalculateRefundPaymentStatus($order);
         } catch (\DomainException $e) {
-            // If the refund succeeded in Stripe but our state machine rejected the transition,
-            // keep the Stripe refund record in history for manual review.
+            // Keep a history note for manual review if the local status couldn't be updated.
             OrderStatusHistory::create([
                 'order_id' => $order->getKey(),
                 'status' => $order->status,
-                'note' => 'Stripe refund created but local status update failed: ' . $e->getMessage(),
+                'note' => 'Stripe refund created but local refund status update failed: ' . $e->getMessage(),
                 'changed_by' => $request->user()?->getKey(),
             ]);
         }
@@ -103,7 +143,7 @@ class StripeRefundController extends Controller
         OrderStatusHistory::create([
             'order_id' => $order->getKey(),
             'status' => $order->status,
-            'note' => 'Stripe refund created: ' . $refund->id . ' (status: ' . ($refund->status ?? '-') . ').',
+            'note' => 'Stripe refund created: ' . ($refund->id ?? '-') . ' (status: ' . ($refund->status ?? '-') . ').',
             'changed_by' => $request->user()?->getKey(),
         ]);
 
