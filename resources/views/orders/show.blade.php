@@ -42,6 +42,10 @@
         };
         $totalItems = $order->items->sum('quantity');
         $itemsTotal = $order->items->sum('total_price');
+        $displaySubtotal = (float) ($order->subtotal_amount ?? 0);
+        if ($displaySubtotal <= 0) {
+            $displaySubtotal = (float) $itemsTotal;
+        }
         $isAdmin = auth()->user()->role === 'admin';
         $isStaff = auth()->user()->role === 'staff';
         // Shipping starts once shipment_status reaches "shipped" (and includes "delivered").
@@ -78,15 +82,33 @@
             <div style="font-size:20px; font-weight:700;">{{ $totalItems }}</div>
         </div>
         <div>
-            <div style="color:#bfbfbf; font-size:12px;">Total</div>
+            <div style="color:#bfbfbf; font-size:12px;">Subtotal</div>
             <div style="font-size:20px; font-weight:700;">
-                RM {{ $order->total_amount > 0 ? number_format((float) $order->total_amount, 2) : number_format((float) $itemsTotal, 2) }}
+                RM {{ number_format((float) $displaySubtotal, 2) }}
             </div>
         </div>
         <div>
             <div style="color:#bfbfbf; font-size:12px;">Shipping Fee</div>
             <div style="font-size:20px; font-weight:700;">
                 RM {{ number_format((float) ($order->shipping_fee ?? 0), 2) }}
+            </div>
+        </div>
+        <div>
+            <div style="color:#bfbfbf; font-size:12px;">Discount</div>
+            <div style="font-size:20px; font-weight:700;">
+                RM {{ number_format((float) ($order->discount_amount ?? 0), 2) }}
+            </div>
+        </div>
+        <div>
+            <div style="color:#bfbfbf; font-size:12px;">Tax</div>
+            <div style="font-size:20px; font-weight:700;">
+                RM {{ number_format((float) ($order->tax_amount ?? 0), 2) }}
+            </div>
+        </div>
+        <div>
+            <div style="color:#bfbfbf; font-size:12px;">Grand Total</div>
+            <div style="font-size:20px; font-weight:700;">
+                RM {{ number_format((float) ($order->total_amount ?? 0), 2) }}
             </div>
         </div>
     </div>
@@ -135,7 +157,10 @@
                     <th>Maintenance Year</th>
                     <th>Quantity</th>
                     <th>Unit Price</th>
-                    <th>Total</th>
+                    <th>Subtotal</th>
+                    <th>Discount</th>
+                    <th>Tax</th>
+                    <th>Line Total</th>
                 </tr>
             </thead>
             <tbody>
@@ -146,11 +171,14 @@
                         <td>{{ $item->maintenance_year ?? '-' }}</td>
                         <td>{{ $item->quantity }}</td>
                         <td>RM {{ number_format((float) $item->unit_price, 2) }}</td>
-                        <td>RM {{ number_format((float) $item->total_price, 2) }}</td>
+                        <td>RM {{ number_format((float) ($item->line_subtotal ?? $item->total_price), 2) }}</td>
+                        <td>RM {{ number_format((float) ($item->line_discount ?? 0), 2) }}</td>
+                        <td>RM {{ number_format((float) ($item->line_tax ?? 0), 2) }}</td>
+                        <td>RM {{ number_format((float) ($item->line_total ?? $item->total_price), 2) }}</td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="6">No items recorded for this order.</td>
+                        <td colspan="9">No items recorded for this order.</td>
                     </tr>
                 @endforelse
             </tbody>
@@ -169,7 +197,7 @@
                     <label for="status">Status</label>
                     <select name="status" required>
                         @foreach($statuses as $status)
-                            @if($status !== 'cancelled' && ($order->status === $status || $order->canTransitionStatusTo($status)))
+                            @if(!in_array($status, ['cancelled', 'shipped', 'delivered'], true) && ($order->status === $status || $order->canTransitionStatusTo($status)))
                                 <option value="{{ $status }}" {{ $order->status === $status ? 'selected' : '' }}>
                                     {{ ucfirst($status) }}
                                 </option>
@@ -188,9 +216,22 @@
                 <form method="POST" action="{{ route('orders.assign', $order) }}">
                     @csrf
                     @method('PATCH')
-                    <label for="assigned_to">Assigned To</label>
-                    <input type="text" name="assigned_to" value="{{ $order->assigned_to }}">
+                    <label for="assigned_to_user_id">Assigned Staff</label>
+                    <select name="assigned_to_user_id" id="assigned_to_user_id">
+                        <option value="">- Unassigned -</option>
+                        @foreach(($staffUsers ?? []) as $staffUser)
+                            <option value="{{ $staffUser->user_id }}"
+                                {{ ($order->assigned_to_user_id ?? null) === $staffUser->user_id ? 'selected' : '' }}>
+                                {{ $staffUser->name }} ({{ $staffUser->email }})
+                            </option>
+                        @endforeach
+                    </select>
                     <button type="submit" class="btn btn-outline">Save Assignment</button>
+                    @if(!empty($order->assigned_to) && empty($order->assigned_to_user_id))
+                        <p style="margin-top:10px; color:#bfbfbf; font-size:12px;">
+                            Legacy assignment text: {{ $order->assigned_to }}
+                        </p>
+                    @endif
                 </form>
             </div>
         @endif

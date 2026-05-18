@@ -60,7 +60,7 @@
                     <td>{{ $product->name }}</td>
                     <td>{{ $product->category?->name ?? 'Uncategorized' }}</td>
                     <td>
-                        @if((string) $product->category_id === '3' && !empty($product->maintenance_prices))
+                        @if($product->requires_maintenance && !empty($product->maintenance_prices))
                             @php
                                 $maintenancePrices = $product->maintenance_prices ?? [];
                                 if (!empty($maintenancePrices)) {
@@ -77,7 +77,7 @@
                         @endif
                     </td>
                     <td>
-                        @if((string) $product->category_id === '3' && !empty($product->maintenance_prices))
+                        @if($product->requires_maintenance && !empty($product->maintenance_prices))
                             @php
                                 $maintenancePrices = $product->maintenance_prices ?? [];
                                 if (!empty($maintenancePrices)) {

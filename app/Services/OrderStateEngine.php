@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Order;
 use App\Models\OrderRefund;
 use App\Models\OrderStatusHistory;
+use App\Models\Shipment;
 use Illuminate\Support\Facades\DB;
 
 class OrderStateEngine
@@ -51,6 +52,10 @@ class OrderStateEngine
     {
         if ($nextStatus === 'cancelled') {
             throw new \DomainException('Use cancelOrder for cancellations.');
+        }
+
+        if (in_array($nextStatus, ['shipped', 'delivered'], true)) {
+            throw new \DomainException('Shipping-related fulfillment states are derived from shipments. Update shipments instead.');
         }
 
         if ($lockedOrder->status === $nextStatus) {
@@ -106,7 +111,7 @@ class OrderStateEngine
             throw new \DomainException('Only pending/processing orders can be cancelled.');
         }
 
-        if ($lockedOrder->shipment_status !== 'pending') {
+        if (!$this->isShipmentStatePendingLocked($lockedOrder)) {
             throw new \DomainException('Cannot cancel after shipment has started.');
         }
 
@@ -145,7 +150,7 @@ class OrderStateEngine
             throw new \DomainException('Only cancelled orders can be reopened.');
         }
 
-        if ($lockedOrder->shipment_status !== 'pending') {
+        if (!$this->isShipmentStatePendingLocked($lockedOrder)) {
             throw new \DomainException('Cannot reopen after shipment has started.');
         }
 
@@ -161,6 +166,153 @@ class OrderStateEngine
             'note' => $historyNote ?: 'Order reopened.',
             'changed_by' => $changedByUserId,
         ]);
+    }
+
+    /**
+     * Single source of truth: derive order shipment_status + fulfillment status from Shipment rows.
+     *
+     * - shipment_status is an aggregated summary across shipments (pending/shipped/delivered)
+     * - fulfillment status (orders.status) progresses to shipped/delivered based on shipment summary
+     * - never regresses fulfillment status automatically
+     */
+    public function syncShipmentDerivedState(Order $order, ?string $note = null, ?string $changedByUserId = null): void
+    {
+        DB::transaction(function () use ($order, $note, $changedByUserId) {
+            /** @var \App\Models\Order|null $locked */
+            $locked = Order::query()->whereKey($order->getKey())->lockForUpdate()->first();
+            if (!$locked) {
+                throw new \RuntimeException('Order not found.');
+            }
+
+            $this->syncShipmentDerivedStateLocked($locked, $note, $changedByUserId);
+        });
+    }
+
+    public function syncShipmentDerivedStateLocked(Order $lockedOrder, ?string $note = null, ?string $changedByUserId = null): void
+    {
+        $shipments = Shipment::query()
+            ->where('order_id', $lockedOrder->getKey())
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+
+        $derivedShipmentStatus = self::deriveOrderShipmentStatus($shipments->pluck('status')->all());
+
+        $primaryTracking = $shipments
+            ->pluck('tracking_number')
+            ->filter(fn ($value) => is_string($value) && trim($value) !== '')
+            ->map(fn ($value) => trim((string) $value))
+            ->first();
+
+        $didChangeShipmentSummary = $lockedOrder->shipment_status !== $derivedShipmentStatus;
+        $didChangeTracking = $lockedOrder->tracking_number !== $primaryTracking;
+
+        if ($didChangeShipmentSummary) {
+            $lockedOrder->shipment_status = $derivedShipmentStatus;
+
+            if (in_array($derivedShipmentStatus, ['shipped', 'delivered'], true) && !$lockedOrder->shipping_confirmed_at) {
+                $lockedOrder->shipping_confirmed_at = now();
+            }
+        }
+
+        if ($didChangeTracking) {
+            $lockedOrder->tracking_number = $primaryTracking ?: null;
+        }
+
+        $currentFulfillment = (string) ($lockedOrder->status ?: 'pending');
+
+        if ($lockedOrder->status !== 'cancelled') {
+            if ($derivedShipmentStatus === 'delivered' && $currentFulfillment !== 'delivered') {
+                $lockedOrder->status = 'delivered';
+                $lockedOrder->save();
+
+                OrderStatusHistory::create([
+                    'order_id' => $lockedOrder->getKey(),
+                    'status' => 'delivered',
+                    'note' => $note ?: 'Auto: delivered (derived from shipments).',
+                    'changed_by' => $changedByUserId,
+                ]);
+
+                return;
+            }
+
+            if ($derivedShipmentStatus === 'shipped' && in_array($currentFulfillment, ['pending', 'processing'], true)) {
+                $lockedOrder->status = 'shipped';
+                $lockedOrder->save();
+
+                OrderStatusHistory::create([
+                    'order_id' => $lockedOrder->getKey(),
+                    'status' => 'shipped',
+                    'note' => $note ?: 'Auto: shipment started (derived from shipments).',
+                    'changed_by' => $changedByUserId,
+                ]);
+
+                return;
+            }
+        }
+
+        if ($didChangeShipmentSummary || $didChangeTracking) {
+            $lockedOrder->save();
+        }
+    }
+
+    /**
+     * @param array<int, mixed> $shipmentStatuses
+     */
+    public static function deriveOrderShipmentStatus(array $shipmentStatuses): string
+    {
+        if ($shipmentStatuses === []) {
+            return 'pending';
+        }
+
+        $normalized = array_values(array_filter(array_map(function ($value) {
+            if (!is_string($value)) {
+                return null;
+            }
+
+            $value = trim($value);
+
+            return $value === '' ? null : $value;
+        }, $shipmentStatuses)));
+
+        if ($normalized === []) {
+            return 'pending';
+        }
+
+        $allDelivered = true;
+        $hasShippedOrDelivered = false;
+
+        foreach ($normalized as $status) {
+            if ($status !== 'delivered') {
+                $allDelivered = false;
+            }
+
+            if (in_array($status, ['shipped', 'delivered'], true)) {
+                $hasShippedOrDelivered = true;
+            }
+        }
+
+        if ($allDelivered) {
+            return 'delivered';
+        }
+
+        if ($hasShippedOrDelivered) {
+            return 'shipped';
+        }
+
+        return 'pending';
+    }
+
+    private function isShipmentStatePendingLocked(Order $lockedOrder): bool
+    {
+        $derived = self::deriveOrderShipmentStatus(
+            Shipment::query()
+                ->where('order_id', $lockedOrder->getKey())
+                ->pluck('status')
+                ->all()
+        );
+
+        return $derived === 'pending';
     }
 
     /**
@@ -203,7 +355,7 @@ class OrderStateEngine
             return;
         }
 
-        $refundableTotalCents = $this->getRefundableTotalCents($lockedOrder);
+        $refundableTotalCents = $lockedOrder->refundableTotalCents();
 
         $refundedSucceededCents = (int) OrderRefund::query()
             ->where('order_id', $lockedOrder->getKey())
@@ -242,14 +394,6 @@ class OrderStateEngine
         }
 
         return 'paid';
-    }
-
-    private function getRefundableTotalCents(Order $order): int
-    {
-        $total = (float) ($order->total_amount ?? 0);
-        $shippingFee = (float) ($order->shipping_fee ?? 0);
-
-        return (int) round(($total + $shippingFee) * 100);
     }
 
     public function transitionPaymentStatusLocked(Order $lockedOrder, string $nextStatus, ?string $failureReason = null, bool $clearFailure = true): void

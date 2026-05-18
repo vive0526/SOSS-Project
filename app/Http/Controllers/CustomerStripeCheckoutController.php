@@ -13,6 +13,8 @@ use Stripe\StripeClient;
 
 class CustomerStripeCheckoutController extends Controller
 {
+    private const EXPECTED_CURRENCY = 'myr';
+
     public function start(Order $order, Request $request, StripeCheckoutService $checkoutService, OrderStateEngine $orderStateEngine)
     {
         if ($order->user_id !== $request->user()->getKey()) {
@@ -107,6 +109,36 @@ class CustomerStripeCheckoutController extends Controller
         }
 
         if ($session->payment_status === 'paid') {
+            if (isset($session->currency) && $session->currency !== null) {
+                $receivedCurrency = strtolower((string) $session->currency);
+                if ($receivedCurrency !== self::EXPECTED_CURRENCY) {
+                    Log::error('Stripe currency mismatch on customer return; not verifying order.', [
+                        'order_id' => $order->getKey(),
+                        'expected' => self::EXPECTED_CURRENCY,
+                        'received' => $receivedCurrency,
+                        'session_id' => $sessionId,
+                    ]);
+
+                    return redirect()->route('customer.orders.show', $order)
+                        ->withErrors(['payment' => 'Payment received but currency mismatch detected. We will review it shortly.']);
+                }
+            }
+
+            if (isset($session->amount_total) && $session->amount_total !== null) {
+                $expected = (int) round(((float) $order->total_amount) * 100);
+                if ((int) $session->amount_total !== $expected) {
+                    Log::error('Stripe amount mismatch on customer return; not verifying order.', [
+                        'order_id' => $order->getKey(),
+                        'expected' => $expected,
+                        'received' => (int) $session->amount_total,
+                        'session_id' => $sessionId,
+                    ]);
+
+                    return redirect()->route('customer.orders.show', $order)
+                        ->withErrors(['payment' => 'Payment received but amount mismatch detected. We will review it shortly.']);
+                }
+            }
+
             $paymentIntentId = is_string($session->payment_intent) ? $session->payment_intent : ($session->payment_intent?->id ?? null);
             $reference = $paymentIntentId ?: $session->id;
             $orderPaymentService->verifyPayment($order, null, $reference, 'Payment verified via Stripe (customer return).');

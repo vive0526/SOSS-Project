@@ -17,11 +17,19 @@ class OrderItem extends Model
         'maintenance_year',
         'quantity',
         'unit_price',
+        'line_subtotal',
+        'line_discount',
+        'line_tax',
+        'line_total',
         'total_price',
     ];
 
     protected $casts = [
         'unit_price' => 'decimal:2',
+        'line_subtotal' => 'decimal:2',
+        'line_discount' => 'decimal:2',
+        'line_tax' => 'decimal:2',
+        'line_total' => 'decimal:2',
         'total_price' => 'decimal:2',
     ];
 

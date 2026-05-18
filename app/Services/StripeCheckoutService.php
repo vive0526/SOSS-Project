@@ -119,6 +119,20 @@ class StripeCheckoutService
             ];
         }
 
+        $taxAmount = $this->toStripeAmount($order->tax_amount ?? 0);
+        if ($taxAmount > 0) {
+            $lineItems[] = [
+                'quantity' => 1,
+                'price_data' => [
+                    'currency' => $currency,
+                    'unit_amount' => $taxAmount,
+                    'product_data' => [
+                        'name' => 'Tax (6%)',
+                    ],
+                ],
+            ];
+        }
+
         return $lineItems;
     }
 
@@ -127,4 +141,3 @@ class StripeCheckoutService
         return (int) round(((float) $amount) * 100);
     }
 }
-

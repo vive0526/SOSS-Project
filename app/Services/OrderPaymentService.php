@@ -6,6 +6,8 @@ use App\Models\InventoryMovement;
 use App\Models\Order;
 use App\Models\OrderStatusHistory;
 use App\Models\Product;
+use App\Notifications\OrderPlacedNotification;
+use App\Notifications\OrderPaymentVerifiedNotification;
 use Illuminate\Support\Facades\DB;
 
 class OrderPaymentService
@@ -16,7 +18,7 @@ class OrderPaymentService
 
     public function verifyPayment(Order $order, ?string $verifiedByUserId = null, ?string $paymentReference = null, ?string $note = null): bool
     {
-        return (bool) DB::transaction(function () use ($order, $verifiedByUserId, $paymentReference, $note) {
+        $verified = (bool) DB::transaction(function () use ($order, $verifiedByUserId, $paymentReference, $note) {
             /** @var \App\Models\Order|null $lockedOrder */
             $lockedOrder = Order::query()
                 ->whereKey($order->getKey())
@@ -154,5 +156,25 @@ class OrderPaymentService
 
             return true;
         });
+
+        if ($verified) {
+            $freshOrder = Order::query()
+                ->with('customer')
+                ->whereKey($order->getKey())
+                ->first();
+
+            $customer = $freshOrder?->customer;
+            if ($freshOrder && $customer) {
+                $isStripe = in_array((string) $freshOrder->payment_method, ['stripe_card', 'stripe_fpx'], true);
+                if ($isStripe) {
+                    // For Stripe, only send the "order received" invoice after payment is verified.
+                    $customer->notify(new OrderPlacedNotification($freshOrder));
+                } else {
+                    $customer->notify(new OrderPaymentVerifiedNotification($freshOrder));
+                }
+            }
+        }
+
+        return $verified;
     }
 }

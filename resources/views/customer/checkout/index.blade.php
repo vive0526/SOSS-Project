@@ -75,6 +75,31 @@
         </div>
 
         <div class="customer-card">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+                <h3 style="margin:0;">Discount</h3>
+                <a class="btn btn-outline" href="{{ route('customer.discounts.index') }}">View Coupons</a>
+            </div>
+
+            <div class="customer-form__row" style="margin-top:12px;">
+                <div class="customer-field" style="flex:1 1 320px;">
+                    <label for="coupon_code">Coupon Code (optional)</label>
+                    <select name="coupon_code" id="coupon_code">
+                        <option value="">No coupon</option>
+                        @foreach($claimedCoupons as $coupon)
+                            <option value="{{ $coupon->code }}"
+                                {{ old('coupon_code', $selectedCouponCode) === $coupon->code ? 'selected' : '' }}>
+                                {{ $coupon->code }} - {{ $coupon->name }}
+                            </option>
+                        @endforeach
+                    </select>
+                    <div style="margin-top:8px; color:#7b6a5b; font-size:12px;">
+                        Tip: Claim a coupon first, then select it here.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="customer-card">
             <h3 style="margin-bottom: 12px;">Order Summary</h3>
             <table class="customer-table">
                 <thead>
@@ -101,6 +126,8 @@
             <div style="display:flex; justify-content:flex-end; margin-top:12px; gap:18px; flex-wrap:wrap;">
                 <div><strong>Subtotal:</strong> RM {{ number_format((float) $subtotal, 2) }}</div>
                 <div><strong>Shipping Fee:</strong> RM {{ number_format((float) $shippingFee, 2) }}</div>
+                <div><strong>Discount:</strong> RM {{ number_format((float) ($discount ?? 0), 2) }}</div>
+                <div><strong>Tax (6%):</strong> RM {{ number_format((float) ($tax ?? 0), 2) }}</div>
                 <div><strong>Total:</strong> RM {{ number_format((float) $total, 2) }}</div>
             </div>
         </div>
@@ -125,6 +152,22 @@
 
             select.addEventListener('change', update);
             update();
+        })();
+
+        (function () {
+            const couponSelect = document.getElementById('coupon_code');
+            if (!couponSelect) return;
+
+            couponSelect.addEventListener('change', function () {
+                const code = String(couponSelect.value || '');
+                const url = new URL(window.location.href);
+                if (code) {
+                    url.searchParams.set('coupon_code', code);
+                } else {
+                    url.searchParams.delete('coupon_code');
+                }
+                window.location.href = url.toString();
+            });
         })();
     </script>
 @endsection

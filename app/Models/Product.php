@@ -25,6 +25,7 @@ class Product extends Model
         'description',
         'price',
         'product_type',
+        'requires_maintenance',
         'maintenance_years',
         'maintenance_prices',
         'stock_quantity',
@@ -35,6 +36,7 @@ class Product extends Model
     ];
 
     protected $casts = [
+        'requires_maintenance' => 'boolean',
         'maintenance_years' => 'integer',
         'maintenance_prices' => 'array',
     ];

@@ -2,13 +2,13 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Models\Concerns\HasPrefixedPrimaryKey;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-class User extends Authenticatable
+class User extends Authenticatable implements MustVerifyEmail
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasFactory, Notifiable, HasPrefixedPrimaryKey;
@@ -62,6 +62,26 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    public function hasVerifiedEmail()
+    {
+        // Staff/admin accounts are treated as verified (no email verification required).
+        if (in_array(($this->role ?? null), ['staff', 'admin'], true)) {
+            return true;
+        }
+
+        return parent::hasVerifiedEmail();
+    }
+
+    public function sendEmailVerificationNotification()
+    {
+        // Don't send verification emails for staff/admin accounts.
+        if (in_array(($this->role ?? null), ['staff', 'admin'], true)) {
+            return;
+        }
+
+        parent::sendEmailVerificationNotification();
     }
 
     public function isCheckoutProfileComplete(): bool

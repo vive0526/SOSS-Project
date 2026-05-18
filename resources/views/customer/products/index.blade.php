@@ -79,7 +79,7 @@
             @php
                 $displayPrice = $product->price;
                 $availableStock = $product->availableStock();
-                if ((string) $product->category_id === '3' && !empty($product->maintenance_prices)) {
+                if ($product->requires_maintenance && !empty($product->maintenance_prices)) {
                     $maintenancePrices = $product->maintenance_prices ?? [];
                     if (!empty($maintenancePrices)) {
                         ksort($maintenancePrices);

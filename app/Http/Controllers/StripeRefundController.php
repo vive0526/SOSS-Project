@@ -58,7 +58,7 @@ class StripeRefundController extends Controller
             return back()->withErrors(['refund' => 'Unsupported payment reference format.']);
         }
 
-        $refundableTotalCents = (int) round((((float) ($order->total_amount ?? 0)) + ((float) ($order->shipping_fee ?? 0))) * 100);
+        $refundableTotalCents = $order->refundableTotalCents();
         $alreadyRefundedCents = (int) OrderRefund::query()
             ->where('order_id', $order->getKey())
             ->where('status', 'succeeded')

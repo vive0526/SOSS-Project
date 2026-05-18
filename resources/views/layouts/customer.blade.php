@@ -52,6 +52,10 @@
                    href="{{ route('customer.updates.index') }}">
                     Order Updates
                 </a>
+                <a class="customer-nav__link {{ request()->is('customer/discounts') ? 'is-active' : '' }}"
+                   href="{{ route('customer.discounts.index') }}">
+                    Discounts
+                </a>
             </nav>
         </aside>
 

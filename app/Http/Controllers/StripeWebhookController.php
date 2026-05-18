@@ -16,6 +16,8 @@ use Stripe\Webhook;
 
 class StripeWebhookController extends Controller
 {
+    private const EXPECTED_CURRENCY = 'myr';
+
     public function handle(Request $request, OrderPaymentService $orderPaymentService, OrderStateEngine $orderStateEngine)
     {
         $payload = $request->getContent();
@@ -55,6 +57,27 @@ class StripeWebhookController extends Controller
                 ]);
 
                 return response('ok');
+            }
+
+            if (isset($session->currency) && $session->currency !== null) {
+                $receivedCurrency = strtolower((string) $session->currency);
+                if ($receivedCurrency !== self::EXPECTED_CURRENCY) {
+                    Log::error('Stripe currency mismatch; not verifying order.', [
+                        'order_id' => $orderId,
+                        'expected' => self::EXPECTED_CURRENCY,
+                        'received' => $receivedCurrency,
+                        'event_type' => $event->type,
+                    ]);
+
+                    OrderStatusHistory::create([
+                        'order_id' => $order->getKey(),
+                        'status' => $order->status,
+                        'note' => 'Stripe payment currency mismatch; manual review required.',
+                        'changed_by' => null,
+                    ]);
+
+                    return response('ok');
+                }
             }
 
             if (isset($session->amount_total) && $session->amount_total !== null) {

@@ -12,13 +12,15 @@ class CustomerCartController extends Controller
         $cart = $request->session()->get('cart', []);
         $priced = $this->priceCartFromDatabase($cart);
 
-        if (!$priced['ok']) {
-            $request->session()->forget('cart');
-            $priced = [
-                'cart' => [],
-                'subtotal' => 0.0,
-                'totalQuantity' => 0,
-            ];
+        $removedInvalidCount = (int) ($priced['removedInvalidCount'] ?? 0);
+        $normalizedCount = (int) ($priced['normalizedCount'] ?? 0);
+        if (($removedInvalidCount + $normalizedCount) > 0) {
+            $request->session()->put('cart', $priced['sanitizedCart'] ?? []);
+            if ($removedInvalidCount > 0) {
+                $request->session()->flash('warning', "We removed {$removedInvalidCount} item(s) that are no longer available or invalid.");
+            } elseif ($normalizedCount > 0) {
+                $request->session()->flash('warning', 'We updated your cart to match the latest product information.');
+            }
         }
 
         return view('customer.cart.index', [
@@ -45,7 +47,7 @@ class CustomerCartController extends Controller
             ])->withInput();
         }
 
-        if ((string) $product->category_id === '3') {
+        if ((bool) ($product->requires_maintenance ?? false)) {
             if (!$maintenanceYear) {
                 return back()->withErrors([
                     'maintenance_year' => 'Select a maintenance year for this product.',
@@ -154,11 +156,10 @@ class CustomerCartController extends Controller
 
         if ($request->expectsJson()) {
             $priced = $this->priceCartFromDatabase($cart);
-            if (!$priced['ok']) {
-                return response()->json([
-                    'ok' => false,
-                    'message' => $priced['message'] ?? 'Unable to update cart.',
-                ], 422);
+            $removedInvalidCount = (int) ($priced['removedInvalidCount'] ?? 0);
+            $normalizedCount = (int) ($priced['normalizedCount'] ?? 0);
+            if (($removedInvalidCount + $normalizedCount) > 0) {
+                $request->session()->put('cart', $priced['sanitizedCart'] ?? []);
             }
 
             $pricedItem = $priced['cart'][$itemKey] ?? null;
@@ -200,7 +201,7 @@ class CustomerCartController extends Controller
 
     private function resolveUnitPrice(Product $product, ?int $maintenanceYear): float
     {
-        if ((string) $product->category_id === '3' && $maintenanceYear) {
+        if ((bool) ($product->requires_maintenance ?? false) && $maintenanceYear) {
             $prices = $product->maintenance_prices ?? [];
             $price = $prices[$maintenanceYear] ?? null;
             if ($price !== null) {
@@ -215,7 +216,7 @@ class CustomerCartController extends Controller
      * Price the cart using authoritative data from the database.
      *
      * @param array<string, array<string, mixed>> $cart
-     * @return array{ok: bool, message?: string, cart?: array<string, array<string, mixed>>, subtotal?: float, totalQuantity?: int}
+     * @return array{ok: bool, cart: array<string, array<string, mixed>>, sanitizedCart: array<string, array<string, mixed>>, subtotal: float, totalQuantity: int, removedInvalidCount?: int, normalizedCount?: int}
      */
     private function priceCartFromDatabase(array $cart): array
     {
@@ -223,6 +224,7 @@ class CustomerCartController extends Controller
             return [
                 'ok' => true,
                 'cart' => [],
+                'sanitizedCart' => [],
                 'subtotal' => 0.0,
                 'totalQuantity' => 0,
             ];
@@ -232,16 +234,17 @@ class CustomerCartController extends Controller
         $products = Product::whereIn('product_id', $productIds)->get()->keyBy('product_id');
 
         $pricedCart = [];
+        $sanitizedCart = [];
         $subtotal = 0.0;
         $totalQuantity = 0;
+        $removedInvalidCount = 0;
+        $normalizedCount = 0;
 
         foreach ($cart as $key => $item) {
             $productId = (string) ($item['product_id'] ?? '');
             if ($productId === '' || !$products->has($productId)) {
-                return [
-                    'ok' => false,
-                    'message' => 'A product in your cart is no longer available.',
-                ];
+                $removedInvalidCount++;
+                continue;
             }
 
             /** @var \App\Models\Product $product */
@@ -249,10 +252,8 @@ class CustomerCartController extends Controller
 
             $quantity = (int) ($item['quantity'] ?? 0);
             if ($quantity < 1) {
-                return [
-                    'ok' => false,
-                    'message' => 'Your cart has an invalid quantity. Please update your cart and try again.',
-                ];
+                $removedInvalidCount++;
+                continue;
             }
 
             $maintenanceYear = isset($item['maintenance_year']) && $item['maintenance_year'] !== null
@@ -262,20 +263,16 @@ class CustomerCartController extends Controller
                 $maintenanceYear = null;
             }
 
-            if ((string) $product->category_id === '3') {
+            if ((bool) ($product->requires_maintenance ?? false)) {
                 if (!$maintenanceYear) {
-                    return [
-                        'ok' => false,
-                        'message' => 'Select a maintenance year for your maintenance product(s).',
-                    ];
+                    $removedInvalidCount++;
+                    continue;
                 }
 
                 $prices = $product->maintenance_prices ?? [];
                 if (!array_key_exists($maintenanceYear, $prices)) {
-                    return [
-                        'ok' => false,
-                        'message' => 'Selected maintenance year is not available for one of your products.',
-                    ];
+                    $removedInvalidCount++;
+                    continue;
                 }
             } else {
                 $maintenanceYear = null;
@@ -283,8 +280,13 @@ class CustomerCartController extends Controller
 
             $unitPrice = $this->resolveUnitPrice($product, $maintenanceYear);
 
-            $pricedCart[$key] = array_merge($item, [
-                'key' => (string) ($item['key'] ?? $key),
+            $resolvedKey = $this->buildKey((string) $product->getKey(), $maintenanceYear);
+            if ($resolvedKey !== (string) $key) {
+                $normalizedCount++;
+            }
+
+            $pricedCart[$resolvedKey] = array_merge($item, [
+                'key' => $resolvedKey,
                 'product_id' => $product->getKey(),
                 'name' => $product->name,
                 'price' => $unitPrice,
@@ -293,6 +295,13 @@ class CustomerCartController extends Controller
                 'image' => $product->image,
             ]);
 
+            $sanitizedCart[$resolvedKey] = [
+                'key' => $resolvedKey,
+                'product_id' => (string) $product->getKey(),
+                'quantity' => $quantity,
+                'maintenance_year' => $maintenanceYear,
+            ];
+
             $subtotal += $unitPrice * $quantity;
             $totalQuantity += $quantity;
         }
@@ -300,8 +309,11 @@ class CustomerCartController extends Controller
         return [
             'ok' => true,
             'cart' => $pricedCart,
+            'sanitizedCart' => $sanitizedCart,
             'subtotal' => $subtotal,
             'totalQuantity' => $totalQuantity,
+            'removedInvalidCount' => $removedInvalidCount,
+            'normalizedCount' => $normalizedCount,
         ];
     }
 }

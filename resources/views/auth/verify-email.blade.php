@@ -1,4 +1,16 @@
 <x-guest-layout>
+    @if (session('warning'))
+        <div class="mb-4 font-medium text-sm text-yellow-700 dark:text-yellow-400">
+            {{ session('warning') }}
+        </div>
+    @endif
+
+    @if ($errors->any())
+        <div class="mb-4 font-medium text-sm text-red-700 dark:text-red-400">
+            {{ $errors->first() }}
+        </div>
+    @endif
+
     <div class="mb-4 text-sm text-gray-600 dark:text-gray-400">
         {{ __('Thanks for signing up! Before getting started, could you verify your email address by clicking on the link we just emailed to you? If you didn\'t receive the email, we will gladly send you another.') }}
     </div>

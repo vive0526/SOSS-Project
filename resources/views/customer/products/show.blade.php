@@ -32,7 +32,7 @@
         $maintenancePrices = [];
         $defaultMaintenanceYear = null;
 
-        if ((string) $product->category_id === '3' && !empty($product->maintenance_prices)) {
+        if ($product->requires_maintenance && !empty($product->maintenance_prices)) {
             $maintenancePrices = $product->maintenance_prices ?? [];
             if (!empty($maintenancePrices)) {
                 ksort($maintenancePrices);
@@ -80,11 +80,11 @@
                     <a class="btn btn-outline" href="{{ route('customer.products.index') }}">Back to Products</a>
                 </div>
             @else
-                <form method="POST" action="{{ route('customer.cart.add') }}">
+                    <form method="POST" action="{{ route('customer.cart.add') }}">
                     @csrf
                     <input type="hidden" name="product_id" value="{{ $product->product_id }}">
 
-                    @if((string) $product->category_id === '3' && !empty($maintenancePrices))
+                    @if($product->requires_maintenance && !empty($maintenancePrices))
                         <div class="customer-product-detail__panel">
                             <h4>Maintenance Options</h4>
                             <div class="customer-maintenance">
@@ -182,7 +182,7 @@
         </script>
     @endif
 
-    @if(!$isCattle && (string) $product->category_id === '3' && !empty($maintenancePrices))
+    @if(!$isCattle && $product->requires_maintenance && !empty($maintenancePrices))
         <script>
             (function () {
                 const select = document.querySelector('[data-maintenance-select]');

@@ -79,7 +79,11 @@
             <p><strong>Items:</strong> {{ $order->items->sum('quantity') }}</p>
             <p><strong>Payment:</strong> {{ $order->payment_verified_at ? 'Verified' : 'Unverified' }}</p>
             <p><strong>Shipment:</strong> {{ ucfirst($order->shipment_status) }}</p>
+            <p><strong>Subtotal:</strong> RM {{ number_format((float) ($order->subtotal_amount ?? $itemsTotal), 2) }}</p>
             <p><strong>Shipping Fee:</strong> RM {{ number_format((float) ($order->shipping_fee ?? 0), 2) }}</p>
+            <p><strong>Discount:</strong> RM {{ number_format((float) ($order->discount_amount ?? 0), 2) }}</p>
+            <p><strong>Tax (6%):</strong> RM {{ number_format((float) ($order->tax_amount ?? 0), 2) }}</p>
+            <p><strong>Grand Total:</strong> RM {{ number_format((float) ($order->total_amount ?? 0), 2) }}</p>
             @if($order->cancelled_at)
                 <p><strong>Cancelled:</strong> {{ $order->cancelled_at->format('Y-m-d H:i') }}</p>
                 <p><strong>Reason:</strong> {{ $order->cancelled_reason }}</p>
@@ -97,7 +101,7 @@
                     <th>Maintenance Year</th>
                     <th>Qty</th>
                     <th>Unit Price</th>
-                    <th>Total</th>
+                    <th>Line Total</th>
                 </tr>
             </thead>
             <tbody>
@@ -108,7 +112,7 @@
                         <td>{{ $item->maintenance_year ?? '-' }}</td>
                         <td>{{ $item->quantity }}</td>
                         <td>RM {{ number_format((float) $item->unit_price, 2) }}</td>
-                        <td>RM {{ number_format((float) $item->total_price, 2) }}</td>
+                        <td>RM {{ number_format((float) ($item->line_total ?? $item->total_price), 2) }}</td>
                     </tr>
                 @empty
                     <tr>

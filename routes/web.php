@@ -17,6 +17,7 @@ use App\Http\Controllers\OrderController;
 use App\Http\Controllers\CustomerOrderController;
 use App\Http\Controllers\CustomerCartController;
 use App\Http\Controllers\CustomerCheckoutController;
+use App\Http\Controllers\CustomerDiscountController;
 use App\Http\Controllers\CustomerStripeCheckoutController;
 use App\Http\Controllers\CustomerCattleRequestController;
 use App\Http\Controllers\CattleRequestController;
@@ -81,7 +82,7 @@ Route::get('/customer/dashboard', function () {
         'categoryCount',
         'inStockCount'
     ));
-})->middleware(['auth', 'role:customer,staff,admin']);
+})->middleware(['auth', 'verified', 'role:customer,staff,admin']);
 
 /*
 |--------------------------------------------------------------------------|
@@ -322,7 +323,7 @@ Route::middleware(['auth', 'role:admin,staff'])
 | Customer Catalog (Customer Only)                                         |
 |--------------------------------------------------------------------------|
 */
-Route::middleware(['auth', 'role:customer'])
+Route::middleware(['auth', 'verified', 'role:customer'])
     ->prefix('customer')
     ->name('customer.')
     ->group(function () {
@@ -339,26 +340,43 @@ Route::middleware(['auth', 'role:customer'])
             ->name('profile-prompt.dismiss');
 
         Route::get('/cart', [CustomerCartController::class, 'index'])
+            ->middleware('active_user')
             ->name('cart.index');
         Route::post('/cart/add', [CustomerCartController::class, 'add'])
+            ->middleware('active_user')
             ->name('cart.add');
         Route::post('/cart/{itemKey}/update', [CustomerCartController::class, 'update'])
+            ->middleware('active_user')
             ->name('cart.update');
         Route::post('/cart/{itemKey}/remove', [CustomerCartController::class, 'remove'])
+            ->middleware('active_user')
             ->name('cart.remove');
 
         Route::get('/checkout', [CustomerCheckoutController::class, 'index'])
+            ->middleware('active_user')
             ->name('checkout.index');
         Route::post('/checkout', [CustomerCheckoutController::class, 'place'])
+            ->middleware('active_user')
             ->name('checkout.place');
         Route::get('/checkout/processing/{order}', [CustomerCheckoutController::class, 'processing'])
+            ->middleware('active_user')
             ->name('checkout.processing');
         Route::get('/checkout/stripe/success', [CustomerStripeCheckoutController::class, 'success'])
+            ->middleware('active_user')
             ->name('checkout.stripe.success');
         Route::get('/checkout/stripe/cancel/{order}', [CustomerStripeCheckoutController::class, 'cancel'])
+            ->middleware('active_user')
             ->name('checkout.stripe.cancel');
         Route::get('/checkout/stripe/{order}', [CustomerStripeCheckoutController::class, 'start'])
+            ->middleware('active_user')
             ->name('checkout.stripe.start');
+
+        Route::get('/discounts', [CustomerDiscountController::class, 'index'])
+            ->middleware('active_user')
+            ->name('discounts.index');
+        Route::post('/discounts/claim/{coupon}', [CustomerDiscountController::class, 'claim'])
+            ->middleware('active_user')
+            ->name('discounts.claim');
 
         Route::get('/orders', [CustomerOrderController::class, 'index'])
             ->name('orders.index');

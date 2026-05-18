@@ -129,6 +129,7 @@ class ProductController extends Controller
             'stock_quantity' => 'required|integer',
             'category_id' => 'nullable|exists:categories,id',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
+            'requires_maintenance' => 'nullable|boolean',
             'maintenance_years' => 'nullable|integer|min:1|max:5',
             'maintenance_prices' => 'nullable|array',
             'maintenance_prices.*' => 'nullable|numeric|min:0',
@@ -141,7 +142,7 @@ class ProductController extends Controller
         $validator = Validator::make($request->all(), $rules);
 
         $validator->after(function ($validator) use ($request) {
-            if ((string) $request->input('category_id') !== '3') {
+            if (!$request->boolean('requires_maintenance')) {
                 return;
             }
 
@@ -162,7 +163,9 @@ class ProductController extends Controller
         $data = $validator->validate();
         unset($data['image']);
 
-        if ((string) $request->input('category_id') !== '3') {
+        $data['requires_maintenance'] = (bool) ($data['requires_maintenance'] ?? false);
+
+        if (!$data['requires_maintenance']) {
             $data['maintenance_years'] = null;
             $data['maintenance_prices'] = null;
             return $data;

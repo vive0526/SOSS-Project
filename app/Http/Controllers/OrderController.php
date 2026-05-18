@@ -6,13 +6,20 @@ use App\Models\InventoryMovement;
 use App\Models\Order;
 use App\Models\OrderStatusHistory;
 use App\Models\Product;
+use App\Models\User;
 use App\Services\OrderPaymentService;
 use App\Services\OrderStateEngine;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
+use Stripe\Exception\ApiErrorException;
+use Stripe\StripeClient;
 
 class OrderController extends Controller
 {
+    private const EXPECTED_CURRENCY = 'myr';
+
     public function index(Request $request)
     {
         $query = Order::with('customer')->orderByDesc('created_at');
@@ -84,12 +91,21 @@ class OrderController extends Controller
 
     public function show(Order $order)
     {
-        $order->load(['customer', 'items.product', 'statusHistories.changedBy', 'refunds.requestedBy']);
+        $order->load(['customer', 'assignedTo', 'items.product', 'statusHistories.changedBy', 'refunds.requestedBy']);
+
+        $staffUsers = collect();
+        if (auth()->user()?->role === 'admin') {
+            $staffUsers = User::query()
+                ->where('role', 'staff')
+                ->orderBy('name')
+                ->get();
+        }
 
         return view('orders.show', [
             'order' => $order,
             'statuses' => Order::STATUSES,
             'shipmentStatuses' => Order::SHIPMENT_STATUSES,
+            'staffUsers' => $staffUsers,
         ]);
     }
 
@@ -102,6 +118,10 @@ class OrderController extends Controller
 
         if ($data['status'] === 'cancelled') {
             return back()->withErrors(['status' => 'Use the cancel action to provide a reason.']);
+        }
+
+        if (in_array($data['status'], ['shipped', 'delivered'], true)) {
+            return back()->withErrors(['status' => 'Shipped/Delivered are derived from shipment updates. Update shipments instead.']);
         }
 
         if ($order->status === $data['status']) {
@@ -126,6 +146,13 @@ class OrderController extends Controller
     {
         if ($order->payment_status === 'paid') {
             return back()->with('success', 'Payment is already verified.');
+        }
+
+        if (in_array($order->payment_method, ['stripe_card', 'stripe_fpx'], true)) {
+            $verification = $this->verifyStripePaymentMatchesOrder($order);
+            if (!$verification['ok']) {
+                return back()->withErrors(['payment' => $verification['message']]);
+            }
         }
 
         $order->load('items.product');
@@ -166,17 +193,169 @@ class OrderController extends Controller
         return back()->with('success', 'Payment verified and stock updated.');
     }
 
+    /**
+     * @return array{ok: bool, message: string}
+     */
+    private function verifyStripePaymentMatchesOrder(Order $order): array
+    {
+        $secretKey = (string) config('services.stripe.secret');
+        if ($secretKey === '') {
+            return [
+                'ok' => false,
+                'message' => 'Stripe is not configured.',
+            ];
+        }
+
+        $reference = (string) ($order->payment_reference ?? '');
+        if ($reference === '') {
+            return [
+                'ok' => false,
+                'message' => 'No Stripe payment reference found for this order.',
+            ];
+        }
+
+        $expectedAmountCents = (int) round(((float) ($order->total_amount ?? 0)) * 100);
+        $stripe = new StripeClient($secretKey);
+
+        try {
+            if (str_starts_with($reference, 'cs_')) {
+                $session = $stripe->checkout->sessions->retrieve($reference, [
+                    'expand' => ['payment_intent'],
+                ]);
+
+                $paymentStatus = (string) ($session->payment_status ?? '');
+                if ($paymentStatus !== 'paid') {
+                    return [
+                        'ok' => false,
+                        'message' => 'Stripe session is not paid (status: ' . ($paymentStatus ?: '-') . ').',
+                    ];
+                }
+
+                $currency = strtolower((string) ($session->currency ?? ''));
+                if ($currency !== '' && $currency !== self::EXPECTED_CURRENCY) {
+                    return [
+                        'ok' => false,
+                        'message' => 'Stripe payment currency mismatch.',
+                    ];
+                }
+
+                $amountTotal = $session->amount_total ?? null;
+                if ($amountTotal !== null && (int) $amountTotal !== $expectedAmountCents) {
+                    return [
+                        'ok' => false,
+                        'message' => 'Stripe payment amount mismatch.',
+                    ];
+                }
+
+                return [
+                    'ok' => true,
+                    'message' => 'ok',
+                ];
+            }
+
+            if (str_starts_with($reference, 'pi_')) {
+                $intent = $stripe->paymentIntents->retrieve($reference, []);
+
+                $status = (string) ($intent->status ?? '');
+                if ($status !== 'succeeded') {
+                    return [
+                        'ok' => false,
+                        'message' => 'Stripe PaymentIntent is not succeeded (status: ' . ($status ?: '-') . ').',
+                    ];
+                }
+
+                $currency = strtolower((string) ($intent->currency ?? ''));
+                if ($currency !== '' && $currency !== self::EXPECTED_CURRENCY) {
+                    return [
+                        'ok' => false,
+                        'message' => 'Stripe payment currency mismatch.',
+                    ];
+                }
+
+                $amount = $intent->amount ?? null;
+                if ($amount !== null && (int) $amount !== $expectedAmountCents) {
+                    return [
+                        'ok' => false,
+                        'message' => 'Stripe payment amount mismatch.',
+                    ];
+                }
+
+                return [
+                    'ok' => true,
+                    'message' => 'ok',
+                ];
+            }
+
+            if (str_starts_with($reference, 'ch_')) {
+                $charge = $stripe->charges->retrieve($reference, []);
+
+                $status = (string) ($charge->status ?? '');
+                if ($status !== 'succeeded') {
+                    return [
+                        'ok' => false,
+                        'message' => 'Stripe charge is not succeeded (status: ' . ($status ?: '-') . ').',
+                    ];
+                }
+
+                $currency = strtolower((string) ($charge->currency ?? ''));
+                if ($currency !== '' && $currency !== self::EXPECTED_CURRENCY) {
+                    return [
+                        'ok' => false,
+                        'message' => 'Stripe payment currency mismatch.',
+                    ];
+                }
+
+                $amount = $charge->amount ?? null;
+                if ($amount !== null && (int) $amount !== $expectedAmountCents) {
+                    return [
+                        'ok' => false,
+                        'message' => 'Stripe payment amount mismatch.',
+                    ];
+                }
+
+                return [
+                    'ok' => true,
+                    'message' => 'ok',
+                ];
+            }
+        } catch (ApiErrorException $e) {
+            Log::warning('Stripe verification failed during manual verify.', [
+                'order_id' => $order->getKey(),
+                'payment_reference' => $reference,
+                'error' => $e->getMessage(),
+            ]);
+
+            return [
+                'ok' => false,
+                'message' => 'Unable to verify Stripe payment reference.',
+            ];
+        }
+
+        return [
+            'ok' => false,
+            'message' => 'Unsupported Stripe payment reference format.',
+        ];
+    }
+
     public function assign(Request $request, Order $order)
     {
         $data = $request->validate([
-            'assigned_to' => 'nullable|string|max:100',
+            'assigned_to_user_id' => [
+                'nullable',
+                'string',
+                'max:16',
+                Rule::exists('users', 'user_id')->where('role', 'staff'),
+            ],
         ]);
 
-        $order->assigned_to = $data['assigned_to'];
+        $assignedToUserId = $data['assigned_to_user_id'] ?? null;
+        $order->assigned_to_user_id = $assignedToUserId;
         $order->save();
 
-        $note = $order->assigned_to
-            ? 'Assigned to ' . $order->assigned_to . '.'
+        $order->loadMissing('assignedTo');
+
+        $note = $order->assignedTo
+            ? 'Assigned to ' . $order->assignedTo->name . '.'
             : 'Assignment cleared.';
 
         $this->logStatus($order, $order->status, $note);
@@ -184,7 +363,7 @@ class OrderController extends Controller
         return back()->with('success', 'Assignment updated.');
     }
 
-    public function updateShipment(Request $request, Order $order)
+    public function updateShipment(Request $request, Order $order, OrderStateEngine $orderStateEngine)
     {
         if ($order->status === 'cancelled') {
             return back()->withErrors(['shipment_status' => 'Cannot update shipment for a cancelled order.']);
@@ -206,22 +385,22 @@ class OrderController extends Controller
             'confirm_shipping' => 'nullable|boolean',
         ]);
 
-        $currentShipmentStatus = (string) ($order->shipment_status ?: 'pending');
+        /** @var \App\Models\Shipment|null $shipment */
+        $shipment = $order->shipments()->first();
+        if (!$shipment) {
+            $shipment = $order->shipments()->create([
+                'status' => 'pending',
+                'tracking_number' => $order->tracking_number,
+            ]);
+        }
+
+        $currentShipmentStatus = (string) ($shipment->status ?: 'pending');
         $nextShipmentStatus = (string) $data['shipment_status'];
 
-        $allowedShipmentTransitions = [
-            'pending' => ['shipped'],
-            'shipped' => ['delivered'],
-            'delivered' => [],
-        ];
-
-        if ($currentShipmentStatus !== $nextShipmentStatus) {
-            $allowedNext = $allowedShipmentTransitions[$currentShipmentStatus] ?? [];
-            if (!in_array($nextShipmentStatus, $allowedNext, true)) {
-                return back()->withErrors([
-                    'shipment_status' => 'Invalid shipment status transition: ' . $currentShipmentStatus . ' -> ' . $nextShipmentStatus . '.',
-                ]);
-            }
+        if ($currentShipmentStatus !== $nextShipmentStatus && !$shipment->canTransitionStatusTo($nextShipmentStatus)) {
+            return back()->withErrors([
+                'shipment_status' => 'Invalid shipment status transition: ' . $currentShipmentStatus . ' -> ' . $nextShipmentStatus . '.',
+            ]);
         }
 
         // Shipping is considered started once shipment_status reaches "shipped"
@@ -254,7 +433,9 @@ class OrderController extends Controller
                 }
 
                 $requested = $normalize($data[$field]);
-                $current = $normalize($order->{$field});
+                $current = $field === 'tracking_number'
+                    ? $normalize($shipment->tracking_number)
+                    : $normalize($order->{$field});
 
                 if ($requested !== $current) {
                     $attemptedDetailsChange = true;
@@ -275,11 +456,8 @@ class OrderController extends Controller
             return back()->withErrors(['shipment_status' => 'Verify payment before shipping this order (Cash on Delivery orders are allowed).']);
         }
 
-        $statusChanged = $order->shipment_status !== $data['shipment_status'];
-        $order->shipment_status = $data['shipment_status'];
-
         if (array_key_exists('tracking_number', $data)) {
-            $order->tracking_number = $data['tracking_number'] ?: null;
+            $shipment->tracking_number = $data['tracking_number'] ?: null;
         }
         if (array_key_exists('shipping_name', $data)) {
             $order->shipping_name = $data['shipping_name'];
@@ -307,15 +485,27 @@ class OrderController extends Controller
             $order->shipping_confirmed_at = now();
         }
 
+        $statusChanged = $currentShipmentStatus !== $nextShipmentStatus;
+        if ($statusChanged) {
+            $shipment->status = $nextShipmentStatus;
+            $shipment->status_event_at = now();
+
+            if ($nextShipmentStatus === 'shipped' && !$shipment->shipped_at) {
+                $shipment->shipped_at = now();
+            }
+            if ($nextShipmentStatus === 'delivered') {
+                $shipment->delivered_at = $shipment->delivered_at ?: now();
+            }
+        }
+
+        $shipment->save();
         $order->save();
 
-        if ($statusChanged) {
-            $this->logStatus(
-                $order,
-                $order->status,
-                'Shipment status updated to ' . $order->shipment_status . '.'
-            );
-        }
+        $orderStateEngine->syncShipmentDerivedState(
+            $order,
+            $statusChanged ? ('Shipment status updated to ' . $nextShipmentStatus . '.') : 'Shipment details updated.',
+            auth()->id()
+        );
 
         return back()->with('success', 'Shipment details updated.');
     }

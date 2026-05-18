@@ -28,6 +28,12 @@
             <label>Password</label>
             <input type="password" name="password" required>
 
+            <div style="display:flex; justify-content:flex-end; margin-top:8px;">
+                <a href="{{ route('password.request') }}" style="font-size:12px; color:#d6c7b8; text-decoration:underline;">
+                    Forgot password?
+                </a>
+            </div>
+
             <button class="btn btn-primary" type="submit" onclick="this.classList.add('loading')">Sign In</button>
         </form>
 

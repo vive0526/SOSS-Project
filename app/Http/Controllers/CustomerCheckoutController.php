@@ -3,18 +3,23 @@
 namespace App\Http\Controllers;
 
 use App\Exceptions\InsufficientStockException;
+use App\Models\Coupon;
+use App\Models\CouponClaim;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\OrderStatusHistory;
 use App\Models\Product;
 use App\Notifications\CompleteProfileNotification;
+use App\Notifications\OrderPlacedNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class CustomerCheckoutController extends Controller
 {
-    private const SHIPPING_FEE = 10.00;
+    private const SHIPPING_FEE_PENINSULAR = 5.00;
+
+    private const TAX_RATE = 0.06;
 
     private const PAYMENT_METHODS = [
         'cash_on_delivery' => 'Cash on Delivery',
@@ -41,13 +46,61 @@ class CustomerCheckoutController extends Controller
                 ->withErrors(['cart' => $priced['message']]);
         }
 
+        $removedInvalidCount = (int) ($priced['removedInvalidCount'] ?? 0);
+        $normalizedCount = (int) ($priced['normalizedCount'] ?? 0);
+        if (($removedInvalidCount + $normalizedCount) > 0) {
+            $request->session()->put('cart', $priced['sanitizedCart'] ?? []);
+            if (empty($priced['cart'] ?? [])) {
+                return redirect()->route('customer.cart.index')
+                    ->withErrors(['cart' => 'Your cart is empty.']);
+            }
+            if ($removedInvalidCount > 0) {
+                $request->session()->flash('warning', "We removed {$removedInvalidCount} item(s) that are no longer available or invalid.");
+            } elseif ($normalizedCount > 0) {
+                $request->session()->flash('warning', 'We updated your cart to match the latest product information.');
+            }
+        }
+
+        $state = (string) old('shipping_state', $request->user()->shipping_state);
+        $country = (string) old('shipping_country', $request->user()->shipping_country ?? 'Malaysia');
+        $shippingFee = $this->resolveShippingFee($state, $country);
+
+        $claimedCoupons = CouponClaim::query()
+            ->where('user_id', $request->user()->getKey())
+            ->whereNull('redeemed_at')
+            ->with('coupon')
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn (CouponClaim $claim) => $claim->coupon)
+            ->filter();
+
+        $selectedCouponCode = (string) $request->query('coupon_code', old('coupon_code', ''));
+        if ($selectedCouponCode === '') {
+            $selectedCouponCode = '';
+        }
+
+        $discountPreview = 0.0;
+        if ($selectedCouponCode !== '') {
+            $resolved = $this->resolveCouponDiscount($request->user()->getKey(), $selectedCouponCode, (float) $priced['subtotal']);
+            if ($resolved['ok']) {
+                $discountPreview = (float) ($resolved['discount'] ?? 0);
+            }
+        }
+
+        $taxable = max(0.0, ((float) $priced['subtotal']) - $discountPreview);
+        $taxPreview = $this->roundMoney($taxable * self::TAX_RATE);
+
         return view('customer.checkout.index', [
             'cart' => $priced['cart'],
             'subtotal' => $priced['subtotal'],
-            'shippingFee' => self::SHIPPING_FEE,
-            'total' => $priced['subtotal'] + self::SHIPPING_FEE,
+            'shippingFee' => $shippingFee,
+            'discount' => $discountPreview,
+            'tax' => $taxPreview,
+            'total' => $taxable + $taxPreview + $shippingFee,
             'paymentMethods' => self::PAYMENT_METHODS,
             'customer' => $request->user(),
+            'claimedCoupons' => $claimedCoupons,
+            'selectedCouponCode' => $selectedCouponCode,
         ]);
     }
 
@@ -73,6 +126,7 @@ class CustomerCheckoutController extends Controller
             'shipping_postcode' => 'required|string|max:30',
             'shipping_country' => 'required|string|max:120',
             'payment_method' => 'required|in:' . implode(',', array_keys(self::PAYMENT_METHODS)),
+            'coupon_code' => 'nullable|string|max:32',
         ]);
 
         $priced = $this->priceCartFromDatabase($cart);
@@ -81,13 +135,29 @@ class CustomerCheckoutController extends Controller
                 ->withErrors(['cart' => $priced['message']]);
         }
 
+        $removedInvalidCount = (int) ($priced['removedInvalidCount'] ?? 0);
+        $normalizedCount = (int) ($priced['normalizedCount'] ?? 0);
+        if (($removedInvalidCount + $normalizedCount) > 0) {
+            $cart = $priced['sanitizedCart'] ?? [];
+            $request->session()->put('cart', $cart);
+            if (empty($priced['cart'] ?? [])) {
+                return redirect()->route('customer.cart.index')
+                    ->withErrors(['cart' => 'Your cart is empty.']);
+            }
+            if ($removedInvalidCount > 0) {
+                $request->session()->flash('warning', "We removed {$removedInvalidCount} item(s) that are no longer available or invalid.");
+            } elseif ($normalizedCount > 0) {
+                $request->session()->flash('warning', 'We updated your cart to match the latest product information.');
+            }
+        }
+
         $isStripe = in_array($data['payment_method'], ['stripe_card', 'stripe_fpx'], true);
         $reservedAt = now();
         $reservationExpiresAt = $isStripe ? now()->addMinutes(5) : null;
 
         try {
-            $order = DB::transaction(function () use ($request, $data, $priced, $reservedAt, $reservationExpiresAt, $isStripe) {
-                $productIds = collect($priced['cart'])->pluck('product_id')->filter()->unique()->values()->all();
+            $order = DB::transaction(function () use ($request, $data, $priced, $cart, $reservedAt, $reservationExpiresAt, $isStripe) {
+                $productIds = collect($cart)->pluck('product_id')->filter()->unique()->values()->all();
                 $products = Product::query()
                     ->whereIn('product_id', $productIds)
                     ->orderBy('product_id')
@@ -95,7 +165,18 @@ class CustomerCheckoutController extends Controller
                     ->get()
                     ->keyBy('product_id');
 
-                foreach ($priced['cart'] as $item) {
+                $pricedLocked = $this->priceCartFromProductMap($cart, $products);
+                if (!$pricedLocked['ok']) {
+                    throw new \RuntimeException((string) ($pricedLocked['message'] ?? 'Your cart is invalid. Please review your cart and try again.'));
+                }
+
+                $removedInvalidCount = (int) ($pricedLocked['removedInvalidCount'] ?? 0);
+                $normalizedCount = (int) ($pricedLocked['normalizedCount'] ?? 0);
+                if (($removedInvalidCount + $normalizedCount) > 0 || empty($pricedLocked['cart'] ?? [])) {
+                    throw new \RuntimeException('Your cart has changed due to updated maintenance options or pricing. Please review checkout and try again.');
+                }
+
+                foreach ($pricedLocked['cart'] as $item) {
                     $productId = (string) ($item['product_id'] ?? '');
                     /** @var \App\Models\Product|null $product */
                     $product = $products->get($productId);
@@ -118,7 +199,7 @@ class CustomerCheckoutController extends Controller
                     }
                 }
 
-                foreach ($priced['cart'] as $item) {
+                foreach ($pricedLocked['cart'] as $item) {
                     $productId = (string) ($item['product_id'] ?? '');
                     /** @var \App\Models\Product $product */
                     $product = $products->get($productId);
@@ -128,12 +209,45 @@ class CustomerCheckoutController extends Controller
                     $product->save();
                 }
 
+                $shippingFee = $this->resolveShippingFee((string) $data['shipping_state'], (string) $data['shipping_country']);
+
+                $couponCode = isset($data['coupon_code']) ? trim((string) $data['coupon_code']) : '';
+                $coupon = null;
+                $discountAmount = 0.0;
+                $orderDiscountType = null;
+                $orderDiscountValue = null;
+
+                if ($couponCode !== '') {
+                    $resolved = $this->resolveCouponDiscount($request->user()->getKey(), $couponCode, (float) $pricedLocked['subtotal'], true);
+                    if (!$resolved['ok']) {
+                        throw new \RuntimeException((string) ($resolved['message'] ?? 'Invalid coupon.'));
+                    }
+
+                    /** @var \App\Models\Coupon $coupon */
+                    $coupon = $resolved['coupon'];
+                    $discountAmount = (float) ($resolved['discount'] ?? 0);
+                    $orderDiscountType = (string) $coupon->discount_type;
+                    $orderDiscountValue = (float) $coupon->discount_value;
+                }
+
+                $taxableBase = max(0.0, ((float) $pricedLocked['subtotal']) - $discountAmount);
+                $taxAmount = $this->roundMoney($taxableBase * self::TAX_RATE);
+                $grandTotal = $taxableBase + $taxAmount + $shippingFee;
+
                 $order = Order::create([
                     'user_id' => $request->user()->getKey(),
                     'status' => 'pending',
                     'shipment_status' => 'pending',
-                    'total_amount' => $priced['subtotal'] + self::SHIPPING_FEE,
-                    'shipping_fee' => self::SHIPPING_FEE,
+                    'subtotal_amount' => $pricedLocked['subtotal'],
+                    'discount_amount' => $discountAmount,
+                    'coupon_id' => $coupon?->id,
+                    'coupon_code' => $coupon ? $coupon->code : null,
+                    'order_discount_type' => $orderDiscountType,
+                    'order_discount_value' => $orderDiscountValue,
+                    'tax_amount' => $taxAmount,
+                    'tax_rate' => self::TAX_RATE,
+                    'total_amount' => $grandTotal,
+                    'shipping_fee' => $shippingFee,
                     'payment_method' => $data['payment_method'],
                     'payment_status' => $isStripe ? 'pending' : 'unpaid',
                     'shipping_name' => $data['shipping_name'],
@@ -147,7 +261,29 @@ class CustomerCheckoutController extends Controller
                     'reservation_expires_at' => $reservationExpiresAt,
                 ]);
 
-                foreach ($priced['cart'] as $item) {
+                $lineSubtotalsCents = [];
+                foreach ($pricedLocked['cart'] as $item) {
+                    $lineSubtotal = (float) $item['price'] * (int) $item['quantity'];
+                    $lineSubtotalCents = $this->toCents($lineSubtotal);
+                    $lineSubtotalsCents[] = $lineSubtotalCents;
+                }
+
+                $discountCents = $this->toCents($discountAmount);
+                $discountAllocCents = $this->allocateProRataCents($discountCents, $lineSubtotalsCents);
+
+                $taxableLineBasesCents = [];
+                foreach ($lineSubtotalsCents as $i => $lineSubtotalCents) {
+                    $taxableLineBasesCents[$i] = max(0, $lineSubtotalCents - (int) ($discountAllocCents[$i] ?? 0));
+                }
+                $taxCents = $this->toCents($taxAmount);
+                $taxAllocCents = $this->allocateProRataCents($taxCents, $taxableLineBasesCents);
+
+                foreach ($pricedLocked['cart'] as $index => $item) {
+                    $lineSubtotal = (float) $item['price'] * (int) $item['quantity'];
+                    $lineDiscount = ((int) ($discountAllocCents[$index] ?? 0)) / 100;
+                    $lineTax = ((int) ($taxAllocCents[$index] ?? 0)) / 100;
+                    $lineTotal = $lineSubtotal - $lineDiscount + $lineTax;
+
                     OrderItem::create([
                         'order_id' => $order->getKey(),
                         'product_id' => $item['product_id'],
@@ -155,8 +291,24 @@ class CustomerCheckoutController extends Controller
                         'maintenance_year' => $item['maintenance_year'],
                         'quantity' => $item['quantity'],
                         'unit_price' => $item['price'],
-                        'total_price' => (float) $item['price'] * (int) $item['quantity'],
+                        'line_subtotal' => $lineSubtotal,
+                        'line_discount' => $lineDiscount,
+                        'line_tax' => $lineTax,
+                        'line_total' => $lineTotal,
+                        'total_price' => $lineSubtotal,
                     ]);
+                }
+
+                if ($coupon) {
+                    CouponClaim::query()
+                        ->where('coupon_id', $coupon->id)
+                        ->where('user_id', $request->user()->getKey())
+                        ->whereNull('redeemed_at')
+                        ->limit(1)
+                        ->update([
+                            'order_id' => $order->getKey(),
+                            'redeemed_at' => now(),
+                        ]);
                 }
 
                 OrderStatusHistory::create([
@@ -175,8 +327,10 @@ class CustomerCheckoutController extends Controller
                     ->with('warning', $e->getMessage());
             }
 
-            return redirect()->route('customer.cart.index')
-                ->withErrors(['cart' => $e->getMessage() ?: 'Unable to place order. Please try again.']);
+            return redirect()
+                ->route('customer.checkout.index')
+                ->withErrors(['checkout' => $e->getMessage() ?: 'Unable to place order. Please try again.'])
+                ->withInput();
         }
 
         $request->session()->forget('cart');
@@ -185,8 +339,102 @@ class CustomerCheckoutController extends Controller
             return redirect()->route('customer.checkout.stripe.start', $order);
         }
 
+        $request->user()?->notify(new OrderPlacedNotification($order));
+
         return redirect()->route('customer.checkout.processing', $order)
             ->with('success', 'Order placed successfully.');
+    }
+
+    /**
+     * Price the cart using authoritative data from already-loaded (and potentially locked) Product models.
+     *
+     * @param array<string, array<string, mixed>> $cart
+     * @param \Illuminate\Support\Collection<string, \App\Models\Product> $products
+     * @return array{ok: bool, message?: string, cart?: array<string, array<string, mixed>>, sanitizedCart?: array<string, array<string, mixed>>, removedInvalidCount?: int, normalizedCount?: int, subtotal?: float, totalQuantity?: int}
+     */
+    private function priceCartFromProductMap(array $cart, $products): array
+    {
+        $pricedCart = [];
+        $sanitizedCart = [];
+        $subtotal = 0.0;
+        $totalQuantity = 0;
+        $removedInvalidCount = 0;
+        $normalizedCount = 0;
+
+        foreach ($cart as $key => $item) {
+            $productId = (string) ($item['product_id'] ?? '');
+            if ($productId === '' || !$products->has($productId)) {
+                $removedInvalidCount++;
+                continue;
+            }
+
+            /** @var \App\Models\Product $product */
+            $product = $products->get($productId);
+
+            $quantity = (int) ($item['quantity'] ?? 0);
+            if ($quantity < 1) {
+                $removedInvalidCount++;
+                continue;
+            }
+
+            $maintenanceYear = isset($item['maintenance_year']) && $item['maintenance_year'] !== null
+                ? (int) $item['maintenance_year']
+                : null;
+            if ($maintenanceYear === 0) {
+                $maintenanceYear = null;
+            }
+
+            if ((bool) ($product->requires_maintenance ?? false)) {
+                if (!$maintenanceYear) {
+                    $removedInvalidCount++;
+                    continue;
+                }
+
+                $prices = $product->maintenance_prices ?? [];
+                if (!array_key_exists($maintenanceYear, $prices)) {
+                    $removedInvalidCount++;
+                    continue;
+                }
+            } else {
+                $maintenanceYear = null;
+            }
+
+            $unitPrice = $this->resolveUnitPrice($product, $maintenanceYear);
+            $resolvedKey = $this->buildKey((string) $product->getKey(), $maintenanceYear);
+            if ($resolvedKey !== (string) $key) {
+                $normalizedCount++;
+            }
+
+            $item = array_merge($item, [
+                'key' => $resolvedKey,
+                'product_id' => $product->getKey(),
+                'name' => $product->name,
+                'price' => $unitPrice,
+                'quantity' => $quantity,
+                'maintenance_year' => $maintenanceYear,
+                'image' => $product->image,
+            ]);
+
+            $pricedCart[$resolvedKey] = $item;
+            $sanitizedCart[$resolvedKey] = [
+                'key' => $resolvedKey,
+                'product_id' => (string) $product->getKey(),
+                'quantity' => $quantity,
+                'maintenance_year' => $maintenanceYear,
+            ];
+            $subtotal += $unitPrice * $quantity;
+            $totalQuantity += $quantity;
+        }
+
+        return [
+            'ok' => true,
+            'cart' => $pricedCart,
+            'sanitizedCart' => $sanitizedCart,
+            'removedInvalidCount' => $removedInvalidCount,
+            'normalizedCount' => $normalizedCount,
+            'subtotal' => $subtotal,
+            'totalQuantity' => $totalQuantity,
+        ];
     }
 
     public function processing(Order $order)
@@ -205,7 +453,7 @@ class CustomerCheckoutController extends Controller
      * Price the cart using authoritative data from the database.
      *
      * @param array<string, array<string, mixed>> $cart
-     * @return array{ok: bool, message?: string, cart?: array<string, array<string, mixed>>, products?: \Illuminate\Support\Collection, subtotal?: float, totalQuantity?: int}
+     * @return array{ok: bool, message?: string, cart?: array<string, array<string, mixed>>, sanitizedCart?: array<string, array<string, mixed>>, removedInvalidCount?: int, normalizedCount?: int, products?: \Illuminate\Support\Collection, subtotal?: float, totalQuantity?: int}
      */
     private function priceCartFromDatabase(array $cart): array
     {
@@ -213,16 +461,17 @@ class CustomerCheckoutController extends Controller
         $products = Product::whereIn('product_id', $productIds)->get()->keyBy('product_id');
 
         $pricedCart = [];
+        $sanitizedCart = [];
         $subtotal = 0.0;
         $totalQuantity = 0;
+        $removedInvalidCount = 0;
+        $normalizedCount = 0;
 
         foreach ($cart as $key => $item) {
             $productId = (string) ($item['product_id'] ?? '');
             if ($productId === '' || !$products->has($productId)) {
-                return [
-                    'ok' => false,
-                    'message' => 'A product in your cart is no longer available.',
-                ];
+                $removedInvalidCount++;
+                continue;
             }
 
             /** @var \App\Models\Product $product */
@@ -230,10 +479,8 @@ class CustomerCheckoutController extends Controller
 
             $quantity = (int) ($item['quantity'] ?? 0);
             if ($quantity < 1) {
-                return [
-                    'ok' => false,
-                    'message' => 'Your cart has an invalid quantity. Please update your cart and try again.',
-                ];
+                $removedInvalidCount++;
+                continue;
             }
 
             $maintenanceYear = isset($item['maintenance_year']) && $item['maintenance_year'] !== null
@@ -243,20 +490,16 @@ class CustomerCheckoutController extends Controller
                 $maintenanceYear = null;
             }
 
-            if ((string) $product->category_id === '3') {
+            if ((bool) ($product->requires_maintenance ?? false)) {
                 if (!$maintenanceYear) {
-                    return [
-                        'ok' => false,
-                        'message' => 'Select a maintenance year for your maintenance product(s).',
-                    ];
+                    $removedInvalidCount++;
+                    continue;
                 }
 
                 $prices = $product->maintenance_prices ?? [];
                 if (!array_key_exists($maintenanceYear, $prices)) {
-                    return [
-                        'ok' => false,
-                        'message' => 'Selected maintenance year is not available for one of your products.',
-                    ];
+                    $removedInvalidCount++;
+                    continue;
                 }
             } else {
                 $maintenanceYear = null;
@@ -264,7 +507,13 @@ class CustomerCheckoutController extends Controller
 
             $unitPrice = $this->resolveUnitPrice($product, $maintenanceYear);
 
+            $resolvedKey = $this->buildKey((string) $product->getKey(), $maintenanceYear);
+            if ($resolvedKey !== (string) $key) {
+                $normalizedCount++;
+            }
+
             $item = array_merge($item, [
+                'key' => $resolvedKey,
                 'product_id' => $product->getKey(),
                 'name' => $product->name,
                 'price' => $unitPrice,
@@ -273,7 +522,13 @@ class CustomerCheckoutController extends Controller
                 'image' => $product->image,
             ]);
 
-            $pricedCart[$key] = $item;
+            $pricedCart[$resolvedKey] = $item;
+            $sanitizedCart[$resolvedKey] = [
+                'key' => $resolvedKey,
+                'product_id' => (string) $product->getKey(),
+                'quantity' => $quantity,
+                'maintenance_year' => $maintenanceYear,
+            ];
             $subtotal += $unitPrice * $quantity;
             $totalQuantity += $quantity;
         }
@@ -281,15 +536,191 @@ class CustomerCheckoutController extends Controller
         return [
             'ok' => true,
             'cart' => $pricedCart,
+            'sanitizedCart' => $sanitizedCart,
+            'removedInvalidCount' => $removedInvalidCount,
+            'normalizedCount' => $normalizedCount,
             'products' => $products,
             'subtotal' => $subtotal,
             'totalQuantity' => $totalQuantity,
         ];
     }
 
+    private function buildKey(string $productId, ?int $maintenanceYear): string
+    {
+        return $productId . '-' . ($maintenanceYear ?? 0);
+    }
+
+    private function resolveShippingFee(string $state, string $country): float
+    {
+        $countryNorm = $this->normalizeLocation($country);
+        $stateNorm = $this->normalizeLocation($state);
+
+        if ($countryNorm !== '' && !str_contains($countryNorm, 'malaysia')) {
+            return self::SHIPPING_FEE_PENINSULAR;
+        }
+
+        foreach (['sabah', 'sarawak', 'labuan'] as $freeState) {
+            if ($stateNorm === $freeState || str_contains($stateNorm, $freeState)) {
+                return 0.0;
+            }
+        }
+
+        return self::SHIPPING_FEE_PENINSULAR;
+    }
+
+    /**
+     * @return array{ok: bool, message?: string, coupon?: \App\Models\Coupon, discount?: float}
+     */
+    private function resolveCouponDiscount(string $userId, string $couponCode, float $subtotal, bool $requireClaimed = false): array
+    {
+        $couponCode = trim($couponCode);
+        if ($couponCode === '') {
+            return ['ok' => true, 'discount' => 0.0];
+        }
+
+        $coupon = Coupon::query()
+            ->where('code', $couponCode)
+            ->where('status', Coupon::STATUS_ACTIVE)
+            ->first();
+
+        if (!$coupon) {
+            return ['ok' => false, 'message' => 'Coupon code is invalid.'];
+        }
+
+        $now = now();
+        if ($coupon->starts_at && $coupon->starts_at->gt($now)) {
+            return ['ok' => false, 'message' => 'Coupon is not available yet.'];
+        }
+        if ($coupon->ends_at && $coupon->ends_at->lt($now)) {
+            return ['ok' => false, 'message' => 'Coupon has expired.'];
+        }
+
+        if (((float) $coupon->min_subtotal) > 0 && $subtotal < (float) $coupon->min_subtotal) {
+            return ['ok' => false, 'message' => 'Order subtotal does not meet the coupon minimum.'];
+        }
+
+        if ($requireClaimed) {
+            $claim = CouponClaim::query()
+                ->where('coupon_id', $coupon->id)
+                ->where('user_id', $userId)
+                ->whereNull('redeemed_at')
+                ->lockForUpdate()
+                ->first();
+
+            if (!$claim) {
+                return ['ok' => false, 'message' => 'Please claim this coupon first before using it at checkout.'];
+            }
+        }
+
+        if ($coupon->max_total_redemptions !== null) {
+            $redeemedCount = CouponClaim::query()
+                ->where('coupon_id', $coupon->id)
+                ->whereNotNull('redeemed_at')
+                ->count();
+
+            if ($redeemedCount >= (int) $coupon->max_total_redemptions) {
+                return ['ok' => false, 'message' => 'This coupon has reached its redemption limit.'];
+            }
+        }
+
+        $discount = 0.0;
+        if ((string) $coupon->discount_type === Coupon::TYPE_PERCENT) {
+            $discount = $this->roundMoney($subtotal * (((float) $coupon->discount_value) / 100));
+        } elseif ((string) $coupon->discount_type === Coupon::TYPE_AMOUNT) {
+            $discount = $this->roundMoney((float) $coupon->discount_value);
+        } else {
+            return ['ok' => false, 'message' => 'Coupon configuration is invalid.'];
+        }
+
+        $discount = max(0.0, min($subtotal, $discount));
+
+        return [
+            'ok' => true,
+            'coupon' => $coupon,
+            'discount' => $discount,
+        ];
+    }
+
+    private function normalizeLocation(string $value): string
+    {
+        $value = trim(mb_strtolower($value));
+        $value = preg_replace('/[^a-z0-9\\s]/', ' ', $value) ?? $value;
+        $value = preg_replace('/\\s+/', ' ', $value) ?? $value;
+
+        return trim($value);
+    }
+
+    private function roundMoney(float $value): float
+    {
+        return (float) number_format($value, 2, '.', '');
+    }
+
+    private function toCents(float $amount): int
+    {
+        return (int) round($amount * 100);
+    }
+
+    /**
+     * Distribute total cents across weighted lines, preserving sum(total)=sum(lines).
+     *
+     * @param int $totalCents
+     * @param array<int, int> $weightsCents
+     * @return array<int, int>
+     */
+    private function allocateProRataCents(int $totalCents, array $weightsCents): array
+    {
+        $count = count($weightsCents);
+        if ($count === 0) {
+            return [];
+        }
+
+        if ($totalCents <= 0) {
+            return array_fill(0, $count, 0);
+        }
+
+        $totalWeight = array_sum(array_map(fn ($v) => max(0, (int) $v), $weightsCents));
+        if ($totalWeight <= 0) {
+            $alloc = array_fill(0, $count, 0);
+            $alloc[$count - 1] = $totalCents;
+            return $alloc;
+        }
+
+        $raw = [];
+        $alloc = [];
+        $fractional = [];
+        $allocated = 0;
+
+        foreach ($weightsCents as $i => $w) {
+            $w = max(0, (int) $w);
+            $share = ($totalCents * $w) / $totalWeight;
+            $floor = (int) floor($share);
+            $alloc[$i] = $floor;
+            $allocated += $floor;
+            $fractional[$i] = $share - $floor;
+            $raw[$i] = $share;
+        }
+
+        $remaining = $totalCents - $allocated;
+        if ($remaining > 0) {
+            arsort($fractional);
+            $keys = array_keys($fractional);
+            $k = 0;
+            while ($remaining > 0) {
+                $idx = $keys[$k % count($keys)];
+                $alloc[$idx]++;
+                $remaining--;
+                $k++;
+            }
+        }
+
+        ksort($alloc);
+
+        return array_values($alloc);
+    }
+
     private function resolveUnitPrice(Product $product, ?int $maintenanceYear): float
     {
-        if ((string) $product->category_id === '3' && $maintenanceYear) {
+        if ((bool) ($product->requires_maintenance ?? false) && $maintenanceYear) {
             $prices = $product->maintenance_prices ?? [];
             $price = $prices[$maintenanceYear] ?? null;
             if ($price !== null) {

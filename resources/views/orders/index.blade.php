@@ -144,7 +144,15 @@
                         </td>
                         <td>{{ $order->tracking_number ?? '-' }}</td>
                         <td>
-                            {{ $order->total_amount > 0 ? 'RM ' . number_format((float) $order->total_amount, 2) : '-' }}
+                            @if((float) ($order->total_amount ?? 0) > 0)
+                                <div>RM {{ number_format((float) $order->total_amount, 2) }}</div>
+                                <div style="color:#bfbfbf; font-size:12px;">
+                                    Sub: RM {{ number_format((float) ($order->subtotal_amount ?? 0), 2) }} |
+                                    Ship: RM {{ number_format((float) ($order->shipping_fee ?? 0), 2) }}
+                                </div>
+                            @else
+                                -
+                            @endif
                         </td>
                         <td>{{ $order->created_at?->format('Y-m-d') }}</td>
                         <td>

@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Notifications\AccountStatusChangedNotification;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 
 class UserController extends Controller
@@ -72,6 +74,8 @@ class UserController extends Controller
     {
         $this->authorizeStaffUserAccess($user);
 
+        $previousStatus = (string) ($user->status ?? '');
+
         $roleRule = auth()->user()->role === 'admin'
             ? 'required|in:admin,staff,customer'
             : 'required|in:customer';
@@ -109,6 +113,14 @@ class UserController extends Controller
 
         $user->update($updateData);
 
+        $newStatus = (string) ($user->status ?? '');
+        if ($newStatus !== $previousStatus && Schema::hasTable('notifications')) {
+            $user->notify(new AccountStatusChangedNotification(
+                newStatus: $newStatus,
+                previousStatus: $previousStatus !== '' ? $previousStatus : null,
+            ));
+        }
+
         $indexRoute = auth()->user()->role === 'staff' ? 'staff.users.index' : 'users.index';
 
         return redirect()->route($indexRoute)
@@ -122,7 +134,15 @@ class UserController extends Controller
             $this->authorizeStaffUserAccess($user);
         }
 
+        $previousStatus = (string) ($user->status ?? '');
         $user->update(['status' => 'inactive']);
+
+        if (Schema::hasTable('notifications') && $previousStatus !== 'inactive') {
+            $user->notify(new AccountStatusChangedNotification(
+                newStatus: 'inactive',
+                previousStatus: $previousStatus !== '' ? $previousStatus : null,
+            ));
+        }
 
         $indexRoute = auth()->user()->role === 'staff' ? 'staff.users.index' : 'users.index';
 
@@ -137,7 +157,15 @@ class UserController extends Controller
             $this->authorizeStaffUserAccess($user);
         }
 
+        $previousStatus = (string) ($user->status ?? '');
         $user->update(['status' => 'active']);
+
+        if (Schema::hasTable('notifications') && $previousStatus !== 'active') {
+            $user->notify(new AccountStatusChangedNotification(
+                newStatus: 'active',
+                previousStatus: $previousStatus !== '' ? $previousStatus : null,
+            ));
+        }
 
         $indexRoute = auth()->user()->role === 'staff' ? 'staff.users.index' : 'users.index';
 

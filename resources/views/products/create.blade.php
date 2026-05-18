@@ -38,6 +38,11 @@
             <label for="stock_quantity">Stock Quantity</label>
             <input type="number" name="stock_quantity" required value="{{ old('stock_quantity') }}">
 
+            <label style="display:flex; gap:10px; align-items:center; margin-top:12px;">
+                <input type="checkbox" name="requires_maintenance" value="1" {{ old('requires_maintenance') ? 'checked' : '' }}>
+                Requires maintenance (select years & prices)
+            </label>
+
             <div id="maintenance-section" style="display:none;">
                 <label for="maintenance_years">Maintenance Support (Years)</label>
                 <select name="maintenance_years" id="maintenance_years">
@@ -72,26 +77,26 @@
 
     <script>
         (function () {
-            const categorySelect = document.querySelector('select[name="category_id"]');
+            const toggle = document.querySelector('input[name="requires_maintenance"]');
             const section = document.getElementById('maintenance-section');
             const yearsSelect = document.getElementById('maintenance_years');
 
-            if (!categorySelect || !section || !yearsSelect) return;
+            if (!toggle || !section || !yearsSelect) return;
 
             const yearRows = Array.from(section.querySelectorAll('[data-maintenance-year]'));
 
             const syncMaintenance = () => {
-                const isTreePlanting = categorySelect.value === '3';
-                section.style.display = isTreePlanting ? 'block' : 'none';
+                const enabled = !!toggle.checked;
+                section.style.display = enabled ? 'block' : 'none';
 
                 const years = parseInt(yearsSelect.value || '0', 10);
                 yearRows.forEach(row => {
                     const year = parseInt(row.dataset.maintenanceYear, 10);
-                    row.style.display = isTreePlanting && years >= year ? 'block' : 'none';
+                    row.style.display = enabled && years >= year ? 'block' : 'none';
                 });
             };
 
-            categorySelect.addEventListener('change', syncMaintenance);
+            toggle.addEventListener('change', syncMaintenance);
             yearsSelect.addEventListener('change', syncMaintenance);
             syncMaintenance();
         })();
