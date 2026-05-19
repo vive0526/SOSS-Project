@@ -13,7 +13,12 @@
 
     @if($errors->any())
         <div class="admin-card">
-            <p>There were some issues with your request.</p>
+            <p>There were some issues with your request:</p>
+            <ul style="margin:8px 0 0; padding-left:18px;">
+                @foreach($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
         </div>
     @endif
 
@@ -236,7 +241,7 @@
             </div>
         @endif
         <div>
-            <h3 style="margin-bottom: 12px;">Payment Verification</h3>
+            <h3 style="margin-bottom: 12px;">Payment Confirmation</h3>
             <form method="POST" action="{{ route('orders.verify-payment', $order) }}">
                 @csrf
                 @method('PATCH')
@@ -246,14 +251,14 @@
                     @if($order->status === 'cancelled')
                         Payment Cancelled
                     @else
-                        {{ $order->payment_status === 'paid' ? 'Payment Paid' : 'Mark Payment as Paid' }}
+                        {{ $order->payment_status === 'paid' ? 'Payment Confirmed' : 'Confirm Payment' }}
                     @endif
                 </button>
             </form>
         </div>
         @if($isAdmin && in_array($order->payment_method, ['stripe_card', 'stripe_fpx'], true))
             <div>
-                <h3 style="margin-bottom: 12px;">Stripe Refund</h3>
+                <h3 style="margin-bottom: 12px;">Refund (Stripe)</h3>
                 <form method="POST" action="{{ route('orders.refund.stripe', $order) }}">
                     @csrf
                     <label for="amount">Amount (RM, optional)</label>
@@ -266,7 +271,7 @@
                         <option value="fraudulent">Fraudulent</option>
                     </select>
                     <button type="submit" class="btn btn-outline" {{ !$order->payment_reference ? 'disabled' : '' }}>
-                        Request Refund
+                        Initiate Refund
                     </button>
                 </form>
                 @if($order->payment_method === 'stripe_fpx')
@@ -284,7 +289,7 @@
                 <form method="POST" action="{{ route('orders.update-shipment', $order) }}">
                     @csrf
                     @method('PATCH')
-                    <label for="shipment_status">Shipment Status</label>
+                    <label for="shipment_status">Fulfillment Status</label>
                     <select name="shipment_status" required>
                         @foreach($shipmentStatuses as $shipmentStatus)
                             @continue(!in_array($shipmentStatus, $allowedShipmentStatuses, true))

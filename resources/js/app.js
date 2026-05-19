@@ -1,6 +1,8 @@
 import './bootstrap';
 
 import Alpine from 'alpinejs';
+import flatpickr from 'flatpickr';
+import 'flatpickr/dist/flatpickr.css';
 
 window.Alpine = Alpine;
 
@@ -61,6 +63,23 @@ function initRegisterPasswordRules() {
     }
 }
 
+function initAdminOrderDatePickers() {
+    const inputs = document.querySelectorAll('.js-flatpickr-date');
+    if (!inputs.length) return;
+
+    inputs.forEach((el) => {
+        if (el.dataset.fpBound === '1') return;
+        el.dataset.fpBound = '1';
+
+        flatpickr(el, {
+            dateFormat: 'Y-m-d',
+            allowInput: true,
+            disableMobile: true,
+        });
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     initRegisterPasswordRules();
+    initAdminOrderDatePickers();
 });

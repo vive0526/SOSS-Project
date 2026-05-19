@@ -18,7 +18,7 @@
     @endif
 
     <div class="admin-card">
-        <form method="GET" action="{{ route('orders.index') }}"
+        <form id="orderFiltersForm" method="GET" action="{{ route('orders.index') }}"
               style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end;">
             <div>
                 <label for="search">Search</label>
@@ -50,27 +50,27 @@
                 </select>
             </div>
             <div>
-                <label for="payment">Payment</label>
+                <label for="payment">Payment Status</label>
                 <select name="payment">
-                    <option value="">All payments</option>
+                    <option value="">All payment statuses</option>
                     <option value="paid" {{ in_array(($filters['payment'] ?? ''), ['paid', 'verified'], true) ? 'selected' : '' }}>Paid</option>
                     <option value="pending" {{ ($filters['payment'] ?? '') === 'pending' ? 'selected' : '' }}>Pending</option>
                     <option value="unpaid" {{ in_array(($filters['payment'] ?? ''), ['unpaid', 'unverified'], true) ? 'selected' : '' }}>Unpaid</option>
-                    <option value="refund_pending" {{ ($filters['payment'] ?? '') === 'refund_pending' ? 'selected' : '' }}>Refund pending</option>
-                    <option value="partial_refund" {{ ($filters['payment'] ?? '') === 'partial_refund' ? 'selected' : '' }}>Partial refund</option>
+                    <option value="refund_pending" {{ ($filters['payment'] ?? '') === 'refund_pending' ? 'selected' : '' }}>Refund Pending</option>
+                    <option value="partial_refund" {{ ($filters['payment'] ?? '') === 'partial_refund' ? 'selected' : '' }}>Partial Refund</option>
                     <option value="refunded" {{ ($filters['payment'] ?? '') === 'refunded' ? 'selected' : '' }}>Refunded</option>
                 </select>
             </div>
             <div>
                 <label for="date_from">From</label>
-                <input type="date" name="date_from" value="{{ $filters['date_from'] ?? '' }}">
+                <input type="text" name="date_from" value="{{ $filters['date_from'] ?? '' }}"
+                       class="js-flatpickr-date" placeholder="YYYY-MM-DD" autocomplete="off">
             </div>
             <div>
                 <label for="date_to">To</label>
-                <input type="date" name="date_to" value="{{ $filters['date_to'] ?? '' }}">
+                <input type="text" name="date_to" value="{{ $filters['date_to'] ?? '' }}"
+                       class="js-flatpickr-date" placeholder="YYYY-MM-DD" autocomplete="off">
             </div>
-            <button type="submit" class="btn btn-primary">Apply</button>
-            <a href="{{ route('orders.index') }}" class="btn">Reset</a>
         </form>
     </div>
 
@@ -100,7 +100,7 @@
                     <th>Customer</th>
                     <th>Status</th>
                     <th>Shipment</th>
-                    <th>Payment</th>
+                    <th>Payment Status</th>
                     <th>Tracking</th>
                     <th>Total</th>
                     <th>Created</th>
@@ -167,4 +167,32 @@
             </tbody>
         </table>
     </div>
+
+    <script>
+        (function () {
+            const form = document.getElementById('orderFiltersForm');
+            if (!form) return;
+
+            const autoSubmitFields = form.querySelectorAll('select[name], input.js-flatpickr-date[name], input[type="date"][name]');
+            autoSubmitFields.forEach((el) => {
+                el.addEventListener('change', () => form.requestSubmit());
+            });
+
+            const searchInput = form.querySelector('input[name="search"]');
+            if (searchInput) {
+                searchInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        form.requestSubmit();
+                    }
+                });
+
+                let t = null;
+                searchInput.addEventListener('input', () => {
+                    if (t) window.clearTimeout(t);
+                    t = window.setTimeout(() => form.requestSubmit(), 700);
+                });
+            }
+        })();
+    </script>
 @endsection
