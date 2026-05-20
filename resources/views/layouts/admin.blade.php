@@ -344,6 +344,26 @@
 
             {{-- CONTENT --}}
             <main class="admin-content">
+                @if(session('success'))
+                    <div class="customer-alert" style="margin-bottom:16px;">
+                        <div class="customer-alert__title">Success</div>
+                        <div>{{ session('success') }}</div>
+                    </div>
+                @endif
+
+                @if(session('warning'))
+                    <div class="customer-alert" style="margin-bottom:16px;">
+                        <div class="customer-alert__title">Please note</div>
+                        <div>{{ session('warning') }}</div>
+                    </div>
+                @endif
+
+                @if(session('error'))
+                    <div class="customer-alert customer-alert--error" style="margin-bottom:16px;">
+                        <div class="customer-alert__title">No access</div>
+                        <div>{{ session('error') }}</div>
+                    </div>
+                @endif
                 @yield('content')
             </main>
         </div>

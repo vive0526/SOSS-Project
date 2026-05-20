@@ -144,53 +144,86 @@ class OrderController extends Controller
 
     public function verifyPayment(Request $request, Order $order, OrderPaymentService $orderPaymentService)
     {
-        if ($order->payment_status === 'paid') {
-            return back()->with('success', 'Payment is already verified.');
-        }
-
-        if (in_array($order->payment_method, ['stripe_card', 'stripe_fpx'], true)) {
-            $verification = $this->verifyStripePaymentMatchesOrder($order);
-            if (!$verification['ok']) {
-                return back()->withErrors(['payment' => $verification['message']]);
-            }
-        }
-
-        $order->load('items.product');
-        $insufficient = [];
-
-        foreach ($order->items as $item) {
-            if (!$item->product) {
-                $insufficient[] = $item->product_name . ' (missing product)';
-                continue;
+        try {
+            if ($order->payment_status === 'paid') {
+                return back()->with('success', 'Payment is already verified.');
             }
 
-            $qty = (int) $item->quantity;
-
-            if ($order->reserved_at) {
-                if ((int) $item->product->stock_quantity < $qty || (int) ($item->product->reserved_quantity ?? 0) < $qty) {
-                    $insufficient[] = $item->product->name;
-                }
-            } else {
-                if ($item->product->availableStock() < $qty) {
-                    $insufficient[] = $item->product->name;
+            if (in_array($order->payment_method, ['stripe_card', 'stripe_fpx'], true)) {
+                $verification = $this->verifyStripePaymentMatchesOrder($order);
+                if (!$verification['ok']) {
+                    return back()->withErrors(['payment' => $verification['message']]);
                 }
             }
-        }
 
-        if (!empty($insufficient)) {
+            $order->load('items.product');
+            $insufficient = [];
+
+            foreach ($order->items as $item) {
+                if (!$item->product) {
+                    $insufficient[] = $item->product_name . ' (missing product)';
+                    continue;
+                }
+
+                $qty = (int) $item->quantity;
+                $maintenanceYear = $item->maintenance_year !== null ? (int) $item->maintenance_year : null;
+
+                if ($order->reserved_at) {
+                    if ((int) $item->product->stock_quantity < $qty || (int) ($item->product->reserved_quantity ?? 0) < $qty) {
+                        $insufficient[] = $item->product->name;
+                        continue;
+                    }
+                } else {
+                    if ($item->product->availableStock() < $qty) {
+                        $insufficient[] = $item->product->name;
+                        continue;
+                    }
+                }
+
+                if ($maintenanceYear && (bool) ($item->product->requires_maintenance ?? false)) {
+                    if ($order->reserved_at) {
+                        if ($item->product->maintenanceStockForYear($maintenanceYear) < $qty
+                            || $item->product->reservedMaintenanceForYear($maintenanceYear) < $qty) {
+                            $insufficient[] = $item->product->name . " (maintenance year {$maintenanceYear})";
+                        }
+                    } else {
+                        if ($item->product->availableMaintenanceStock($maintenanceYear) < $qty) {
+                            $insufficient[] = $item->product->name . " (maintenance year {$maintenanceYear})";
+                        }
+                    }
+                }
+            }
+
+            if (!empty($insufficient)) {
+                return back()->withErrors([
+                    'payment' => 'Not enough stock for: ' . implode(', ', $insufficient),
+                ]);
+            }
+
+            $verified = $orderPaymentService->verifyPayment(
+                $order,
+                $request->user()->getKey(),
+                $order->payment_reference,
+                'Payment verified (manual).'
+            );
+
+            if (!$verified) {
+                return back()->withErrors([
+                    'payment' => 'Payment could not be verified. Please refresh the order and try again.',
+                ]);
+            }
+
+            return back()->with('success', 'Payment verified and stock updated.');
+        } catch (\Throwable $e) {
+            Log::error('Manual payment verification failed.', [
+                'order_id' => (string) $order->getKey(),
+                'error' => $e->getMessage(),
+            ]);
+
             return back()->withErrors([
-                'payment' => 'Not enough stock for: ' . implode(', ', $insufficient),
+                'payment' => 'Server error while verifying payment. Please refresh and try again.',
             ]);
         }
-
-        $orderPaymentService->verifyPayment(
-            $order,
-            $request->user()->getKey(),
-            $order->payment_reference,
-            'Payment verified (manual).'
-        );
-
-        return back()->with('success', 'Payment verified and stock updated.');
     }
 
     /**
@@ -581,6 +614,14 @@ class OrderController extends Controller
                         $newStock = $previousStock + (int) $item->quantity;
 
                         $product->stock_quantity = $newStock;
+
+                        $maintenanceYear = $item->maintenance_year !== null ? (int) $item->maintenance_year : null;
+                        if ($maintenanceYear && (bool) ($product->requires_maintenance ?? false)) {
+                            $stocks = $product->maintenance_stocks ?? [];
+                            $current = (int) ($stocks[$maintenanceYear] ?? $stocks[(string) $maintenanceYear] ?? 0);
+                            $stocks[$maintenanceYear] = $current + (int) $item->quantity;
+                            $product->maintenance_stocks = $stocks;
+                        }
                         $product->save();
 
                         InventoryMovement::create([
@@ -612,6 +653,14 @@ class OrderController extends Controller
                         $qty = (int) $item->quantity;
                         $currentReserved = (int) ($product->reserved_quantity ?? 0);
                         $product->reserved_quantity = max(0, $currentReserved - $qty);
+
+                        $maintenanceYear = $item->maintenance_year !== null ? (int) $item->maintenance_year : null;
+                        if ($maintenanceYear && (bool) ($product->requires_maintenance ?? false)) {
+                            $reservedMap = $product->maintenance_reserved_quantities ?? [];
+                            $currentYearReserved = (int) ($reservedMap[$maintenanceYear] ?? $reservedMap[(string) $maintenanceYear] ?? 0);
+                            $reservedMap[$maintenanceYear] = max(0, $currentYearReserved - $qty);
+                            $product->maintenance_reserved_quantities = $reservedMap;
+                        }
                         $product->save();
                     }
                 }

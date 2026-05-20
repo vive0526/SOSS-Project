@@ -35,9 +35,11 @@
         if ($product->requires_maintenance && !empty($product->maintenance_prices)) {
             $maintenancePrices = $product->maintenance_prices ?? [];
             if (!empty($maintenancePrices)) {
-                ksort($maintenancePrices);
-                $defaultMaintenanceYear = (int) array_key_first($maintenancePrices);
-                $displayPrice = $maintenancePrices[$defaultMaintenanceYear] ?? $displayPrice;
+                $lowestPrice = min($maintenancePrices);
+                $lowestYears = array_keys(array_filter($maintenancePrices, fn ($value) => (float) $value === (float) $lowestPrice));
+                sort($lowestYears);
+                $defaultMaintenanceYear = (int) ($lowestYears[0] ?? 1);
+                $displayPrice = $lowestPrice;
             }
         }
 
@@ -94,12 +96,14 @@
                                         @for($year = 1; $year <= 5; $year++)
                                             @php
                                                 $yearPrice = $maintenancePrices[$year] ?? null;
+                                                $yearAvailable = $yearPrice !== null ? $product->availableMaintenanceStock($year) : 0;
                                             @endphp
                                         <option value="{{ $year }}"
                                                 data-price="{{ $yearPrice !== null ? number_format((float) $yearPrice, 2, '.', '') : '' }}"
+                                                data-available="{{ (int) $yearAvailable }}"
                                                 {{ $year === (int) $selectedMaintenanceYear ? 'selected' : '' }}
-                                                {{ $yearPrice === null ? 'disabled' : '' }}>
-                                            Year {{ $year }}
+                                                {{ ($yearPrice === null || $yearAvailable <= 0) ? 'disabled' : '' }}>
+                                            Year {{ $year }}{{ $yearPrice !== null ? ' (' . (int) $yearAvailable . ' left)' : '' }}
                                         </option>
                                         @endfor
                                     </select>
@@ -140,8 +144,9 @@
                 const stockEl = document.querySelector('[data-available-stock]');
                 const qtyInput = document.querySelector('[data-qty-input]');
                 const addBtn = document.querySelector('[data-add-to-cart-btn]');
-                const url = "{{ route('customer.products.stock', $product) }}";
-                if (!stockEl || !qtyInput || !addBtn || !url) return;
+                const baseUrl = "{{ route('customer.products.stock', $product) }}";
+                const yearSelect = document.querySelector('[data-maintenance-select]');
+                if (!stockEl || !qtyInput || !addBtn) return;
 
                 const setUi = (available) => {
                     const n = Number(available);
@@ -166,6 +171,13 @@
 
                 const poll = async () => {
                     try {
+                        let url = baseUrl;
+                        if (yearSelect && yearSelect.value) {
+                            const u = new URL(baseUrl, window.location.origin);
+                            u.searchParams.set('maintenance_year', yearSelect.value);
+                            url = u.toString();
+                        }
+
                         const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
                         if (!res.ok) return;
                         const data = await res.json();
@@ -188,6 +200,9 @@
                 const select = document.querySelector('[data-maintenance-select]');
                 const priceEl = document.querySelector('[data-maintenance-price]');
                 const displayEl = document.querySelector('[data-price-display]');
+                const stockEl = document.querySelector('[data-available-stock]');
+                const qtyInput = document.querySelector('[data-qty-input]');
+                const addBtn = document.querySelector('[data-add-to-cart-btn]');
                 if (!select || !priceEl || !displayEl) return;
 
                 const updatePrice = () => {
@@ -196,6 +211,25 @@
                     const formatted = price ? ('RM ' + Number(price).toFixed(2)) : 'N/A';
                     priceEl.textContent = formatted;
                     displayEl.textContent = formatted;
+
+                    const yearAvailable = option ? parseInt(option.dataset.available || '0', 10) : 0;
+                    if (stockEl && qtyInput && addBtn) {
+                        const safe = Number.isFinite(yearAvailable) ? Math.max(0, Math.floor(yearAvailable)) : 0;
+                        stockEl.textContent = safe > 0 ? (safe + ' in stock') : 'Out of Stock';
+                        stockEl.classList.toggle('is-in', safe > 0);
+                        stockEl.classList.toggle('is-out', safe <= 0);
+                        qtyInput.max = String(safe);
+                        if (safe <= 0) {
+                            qtyInput.disabled = true;
+                            addBtn.disabled = true;
+                        } else {
+                            qtyInput.disabled = false;
+                            addBtn.disabled = false;
+                            const current = parseInt(qtyInput.value || '1', 10);
+                            if (!Number.isFinite(current) || current < 1) qtyInput.value = '1';
+                            if (current > safe) qtyInput.value = String(safe);
+                        }
+                    }
                 };
 
                 select.addEventListener('change', updatePrice);

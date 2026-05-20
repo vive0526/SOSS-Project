@@ -65,6 +65,9 @@ class CustomerCartController extends Controller
         }
 
         $availableStock = $product->availableStock();
+        if ($maintenanceYear && (bool) ($product->requires_maintenance ?? false)) {
+            $availableStock = min($availableStock, $product->availableMaintenanceStock((int) $maintenanceYear));
+        }
 
         if ($availableStock < $data['quantity']) {
             return back()->withErrors([
@@ -133,6 +136,15 @@ class CustomerCartController extends Controller
         }
 
         $availableStock = $product->availableStock();
+        $maintenanceYear = isset($item['maintenance_year']) && $item['maintenance_year'] !== null
+            ? (int) $item['maintenance_year']
+            : null;
+        if ($maintenanceYear === 0) {
+            $maintenanceYear = null;
+        }
+        if ($maintenanceYear && (bool) ($product->requires_maintenance ?? false)) {
+            $availableStock = min($availableStock, $product->availableMaintenanceStock((int) $maintenanceYear));
+        }
 
         if ($availableStock < $data['quantity']) {
             $message = 'Only ' . $availableStock . ' unit(s) available.';

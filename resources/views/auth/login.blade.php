@@ -13,6 +13,12 @@
         Secure access to your dashboard
         </p>
 
+        @if (session('warning'))
+            <p style="color:#d6c7b8; margin-bottom:10px; text-align:center;">
+                {{ session('warning') }}
+            </p>
+        @endif
+
         @if ($errors->any())
             <p style="color:red; margin-bottom:10px;">
                 {{ $errors->first() }}

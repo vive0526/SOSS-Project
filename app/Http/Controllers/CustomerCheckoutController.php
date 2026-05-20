@@ -191,6 +191,23 @@ class CustomerCheckoutController extends Controller
 
                     $reservedQty = (int) ($product->reserved_quantity ?? 0);
                     $available = (int) $product->stock_quantity - $reservedQty;
+
+                    $maintenanceYear = isset($item['maintenance_year']) && $item['maintenance_year'] !== null
+                        ? (int) $item['maintenance_year']
+                        : null;
+                    if ($maintenanceYear === 0) {
+                        $maintenanceYear = null;
+                    }
+
+                    if ($maintenanceYear && (bool) ($product->requires_maintenance ?? false)) {
+                        $yearAvailable = $product->availableMaintenanceStock($maintenanceYear);
+                        if ($yearAvailable < $requestedQty) {
+                            throw new InsufficientStockException(
+                                (string) $product->getKey(),
+                                'Sorry — that maintenance year option is out of stock. Please select another year.'
+                            );
+                        }
+                    }
                     if ($available < $requestedQty) {
                         throw new InsufficientStockException(
                             (string) $product->getKey(),
@@ -206,6 +223,20 @@ class CustomerCheckoutController extends Controller
 
                     $requestedQty = (int) ($item['quantity'] ?? 0);
                     $product->reserved_quantity = (int) ($product->reserved_quantity ?? 0) + $requestedQty;
+
+                    $maintenanceYear = isset($item['maintenance_year']) && $item['maintenance_year'] !== null
+                        ? (int) $item['maintenance_year']
+                        : null;
+                    if ($maintenanceYear === 0) {
+                        $maintenanceYear = null;
+                    }
+
+                    if ($maintenanceYear && (bool) ($product->requires_maintenance ?? false)) {
+                        $reservedMap = $product->maintenance_reserved_quantities ?? [];
+                        $current = (int) ($reservedMap[$maintenanceYear] ?? $reservedMap[(string) $maintenanceYear] ?? 0);
+                        $reservedMap[$maintenanceYear] = $current + $requestedQty;
+                        $product->maintenance_reserved_quantities = $reservedMap;
+                    }
                     $product->save();
                 }
 

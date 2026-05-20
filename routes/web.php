@@ -34,8 +34,8 @@ use App\Models\Product;
 */
 Route::get('/', function () {
     $featuredProducts = Product::with('category')
-        ->whereRaw('(stock_quantity - reserved_quantity) > 0')
-        ->orderByRaw('(stock_quantity - reserved_quantity) desc')
+        ->whereRaw('(stock_quantity - COALESCE(reserved_quantity, 0)) > 0')
+        ->orderByRaw('(stock_quantity - COALESCE(reserved_quantity, 0)) desc')
         ->orderByDesc('updated_at')
         ->take(4)
         ->get();
@@ -73,7 +73,7 @@ Route::get('/customer/dashboard', function () {
         ->get();
     $totalProducts = Product::count();
     $categoryCount = Category::count();
-    $inStockCount = Product::whereRaw('(stock_quantity - reserved_quantity) > 0')->count();
+    $inStockCount = Product::whereRaw('(stock_quantity - COALESCE(reserved_quantity, 0)) > 0')->count();
 
     return view('customer.dashboard', compact(
         'featuredProducts',

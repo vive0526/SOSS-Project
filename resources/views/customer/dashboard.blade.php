@@ -67,12 +67,13 @@
             @forelse($featuredProducts as $product)
                 @php
                     $displayPrice = $product->price;
+                    $displayPricePrefix = '';
                     $availableStock = $product->availableStock();
                     if ($product->requires_maintenance && !empty($product->maintenance_prices)) {
                         $maintenancePrices = $product->maintenance_prices ?? [];
                         if (!empty($maintenancePrices)) {
-                            ksort($maintenancePrices);
-                            $displayPrice = $maintenancePrices[array_key_first($maintenancePrices)];
+                            $displayPrice = min($maintenancePrices);
+                            $displayPricePrefix = 'From ';
                         }
                     }
                 @endphp
@@ -96,7 +97,7 @@
                         </div>
                         <h3 class="customer-product__title">{{ $product->name }}</h3>
                         <div class="customer-product__price">
-                            {{ $displayPrice !== null ? 'RM ' . number_format((float) $displayPrice, 2) : 'N/A' }}
+                            {{ $displayPrice !== null ? $displayPricePrefix . 'RM ' . number_format((float) $displayPrice, 2) : 'N/A' }}
                         </div>
                         <a class="btn btn-outline" href="{{ route('customer.products.show', $product) }}">
                             View

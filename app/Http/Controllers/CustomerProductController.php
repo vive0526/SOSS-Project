@@ -60,16 +60,33 @@ class CustomerProductController extends Controller
         return view('customer.products.show', compact('product'));
     }
 
-    public function stock(Product $product)
+    public function stock(Request $request, Product $product)
     {
         $product->refresh();
+
+        $maintenanceYear = null;
+        if ($request->filled('maintenance_year') && is_numeric($request->input('maintenance_year'))) {
+            $maintenanceYear = (int) $request->input('maintenance_year');
+            if ($maintenanceYear < 1 || $maintenanceYear > 5) {
+                $maintenanceYear = null;
+            }
+        }
+
+        $available = (int) $product->availableStock();
+        $yearAvailable = null;
+        if ($maintenanceYear && (bool) ($product->requires_maintenance ?? false)) {
+            $yearAvailable = (int) $product->availableMaintenanceStock($maintenanceYear);
+            $available = min($available, $yearAvailable);
+        }
 
         return response()->json([
             'ok' => true,
             'product_id' => (string) $product->getKey(),
             'stock_quantity' => (int) $product->stock_quantity,
             'reserved_quantity' => (int) ($product->reserved_quantity ?? 0),
-            'available_stock' => (int) $product->availableStock(),
+            'maintenance_year' => $maintenanceYear,
+            'maintenance_available_stock' => $yearAvailable,
+            'available_stock' => $available,
         ]);
     }
 }

@@ -27,25 +27,21 @@
                 @endforeach
             </select>
 
-            <label for="price">Price</label>
-            <input type="number" name="price" required value="{{ old('price', $product->price) }}">
+            <div id="base-product-fields">
+                <label for="price">Price</label>
+                <input type="number" name="price" required value="{{ old('price', $product->price) }}">
 
-            <label for="product_type">Product Type</label>
-            <select name="product_type" required>
-                <option value="normal" {{ old('product_type', $product->product_type ?? 'normal') === 'normal' ? 'selected' : '' }}>Normal</option>
-                <option value="cattle" {{ old('product_type', $product->product_type ?? 'normal') === 'cattle' ? 'selected' : '' }}>Cattle</option>
-            </select>
+                <label for="product_type">Product Type</label>
+                <select name="product_type" required>
+                    <option value="normal" {{ old('product_type', $product->product_type ?? 'normal') === 'normal' ? 'selected' : '' }}>Normal</option>
+                    <option value="cattle" {{ old('product_type', $product->product_type ?? 'normal') === 'cattle' ? 'selected' : '' }}>Cattle</option>
+                </select>
+            </div>
 
-            <label for="stock_quantity">Stock Quantity</label>
-            <input type="number" name="stock_quantity" required value="{{ old('stock_quantity', $product->stock_quantity) }}">
-
-            <label style="display:flex; gap:10px; align-items:center; margin-top:12px;">
-                <input type="checkbox"
-                       name="requires_maintenance"
-                       value="1"
-                       {{ old('requires_maintenance', $product->requires_maintenance) ? 'checked' : '' }}>
-                Requires maintenance (select years & prices)
-            </label>
+            <div id="main-stock-field">
+                <label for="stock_quantity">Stock Quantity</label>
+                <input type="number" name="stock_quantity" required value="{{ old('stock_quantity', $product->stock_quantity) }}">
+            </div>
 
             <div id="maintenance-section" style="display:none;">
                 <label for="maintenance_years">Maintenance Support (Years)</label>
@@ -61,6 +57,7 @@
 
                 @php
                     $maintenancePrices = $product->maintenance_prices ?? [];
+                    $maintenanceStocks = $product->maintenance_stocks ?? [];
                 @endphp
                 @for($year = 1; $year <= 5; $year++)
                     <div class="maintenance-price-row" data-maintenance-year="{{ $year }}">
@@ -71,6 +68,14 @@
                                name="maintenance_prices[{{ $year }}]"
                                id="maintenance_price_{{ $year }}"
                                value="{{ old("maintenance_prices.$year", $maintenancePrices[$year] ?? '') }}">
+
+                        <label for="maintenance_stock_{{ $year }}" style="margin-top:10px;">Year {{ $year }} Stock</label>
+                        <input type="number"
+                               min="0"
+                               step="1"
+                               name="maintenance_stocks[{{ $year }}]"
+                               id="maintenance_stock_{{ $year }}"
+                               value="{{ old("maintenance_stocks.$year", $maintenanceStocks[$year] ?? '') }}">
                     </div>
                 @endfor
             </div>
@@ -87,14 +92,42 @@
             const toggle = document.querySelector('input[name="requires_maintenance"]');
             const section = document.getElementById('maintenance-section');
             const yearsSelect = document.getElementById('maintenance_years');
+            const baseFields = document.getElementById('base-product-fields');
+            const mainStockField = document.getElementById('main-stock-field');
+            const categorySelect = document.querySelector('select[name="category_id"]');
+            const TREE_PLANTING_CATEGORY_ID = '5';
 
-            if (!toggle || !section || !yearsSelect) return;
+            if (!section || !yearsSelect || !baseFields || !mainStockField || !categorySelect) return;
 
             const yearRows = Array.from(section.querySelectorAll('[data-maintenance-year]'));
+            const baseRequiredFields = Array.from(baseFields.querySelectorAll('[required]'));
+            const mainStockInput = mainStockField.querySelector('input[name="stock_quantity"]');
 
             const syncMaintenance = () => {
-                const enabled = !!toggle.checked;
+                const isTreePlanting = String(categorySelect.value || '') === TREE_PLANTING_CATEGORY_ID;
+                const enabled = isTreePlanting;
+
                 section.style.display = enabled ? 'block' : 'none';
+                baseFields.style.display = enabled ? 'none' : 'block';
+                mainStockField.style.display = enabled ? 'none' : 'block';
+
+                baseRequiredFields.forEach((field) => {
+                    if (enabled) {
+                        field.dataset.wasRequired = '1';
+                        field.removeAttribute('required');
+                    } else if (field.dataset.wasRequired === '1') {
+                        field.setAttribute('required', 'required');
+                    }
+                });
+
+                if (mainStockInput) {
+                    if (enabled) {
+                        mainStockInput.dataset.wasRequired = '1';
+                        mainStockInput.removeAttribute('required');
+                    } else if (mainStockInput.dataset.wasRequired === '1') {
+                        mainStockInput.setAttribute('required', 'required');
+                    }
+                }
 
                 const years = parseInt(yearsSelect.value || '0', 10);
                 yearRows.forEach(row => {
@@ -103,8 +136,8 @@
                 });
             };
 
-            toggle.addEventListener('change', syncMaintenance);
             yearsSelect.addEventListener('change', syncMaintenance);
+            categorySelect.addEventListener('change', syncMaintenance);
             syncMaintenance();
         })();
     </script>

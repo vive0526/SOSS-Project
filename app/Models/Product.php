@@ -28,7 +28,9 @@ class Product extends Model
         'requires_maintenance',
         'maintenance_years',
         'maintenance_prices',
+        'maintenance_stocks',
         'stock_quantity',
+        'maintenance_reserved_quantities',
         'reorder_level',
         'image',
         'category_id',
@@ -39,6 +41,8 @@ class Product extends Model
         'requires_maintenance' => 'boolean',
         'maintenance_years' => 'integer',
         'maintenance_prices' => 'array',
+        'maintenance_stocks' => 'array',
+        'maintenance_reserved_quantities' => 'array',
     ];
 
     public function category(): BelongsTo
@@ -55,6 +59,30 @@ class Product extends Model
     {
         $stock = (int) ($this->stock_quantity ?? 0);
         $reserved = (int) ($this->reserved_quantity ?? 0);
+
+        return max(0, $stock - $reserved);
+    }
+
+    public function maintenanceStockForYear(int $year): int
+    {
+        $stocks = $this->maintenance_stocks ?? [];
+        $value = $stocks[$year] ?? $stocks[(string) $year] ?? 0;
+
+        return max(0, (int) $value);
+    }
+
+    public function reservedMaintenanceForYear(int $year): int
+    {
+        $reserved = $this->maintenance_reserved_quantities ?? [];
+        $value = $reserved[$year] ?? $reserved[(string) $year] ?? 0;
+
+        return max(0, (int) $value);
+    }
+
+    public function availableMaintenanceStock(int $year): int
+    {
+        $stock = $this->maintenanceStockForYear($year);
+        $reserved = $this->reservedMaintenanceForYear($year);
 
         return max(0, $stock - $reserved);
     }

@@ -63,14 +63,15 @@
                         @if($product->requires_maintenance && !empty($product->maintenance_prices))
                             @php
                                 $maintenancePrices = $product->maintenance_prices ?? [];
-                                if (!empty($maintenancePrices)) {
-                                    ksort($maintenancePrices);
-                                }
-                                $firstMaintenanceYear = !empty($maintenancePrices) ? (int) array_key_first($maintenancePrices) : null;
-                                $firstMaintenancePrice = $firstMaintenanceYear ? $maintenancePrices[$firstMaintenanceYear] : null;
+                                $lowestMaintenancePrice = !empty($maintenancePrices) ? min($maintenancePrices) : null;
+                                $lowestMaintenanceYears = !empty($maintenancePrices)
+                                    ? array_keys(array_filter($maintenancePrices, fn ($value) => (float) $value === (float) $lowestMaintenancePrice))
+                                    : [];
+                                sort($lowestMaintenanceYears);
+                                $defaultMaintenanceYear = (int) ($lowestMaintenanceYears[0] ?? 1);
                             @endphp
                             <span class="maintenance-price-value" data-maintenance-price>
-                                {{ $firstMaintenancePrice !== null ? 'RM ' . number_format((float) $firstMaintenancePrice, 2) : '-' }}
+                                {{ $lowestMaintenancePrice !== null ? 'From RM ' . number_format((float) $lowestMaintenancePrice, 2) : '-' }}
                             </span>
                         @else
                             RM {{ number_format((float) $product->price, 2) }}
@@ -80,9 +81,6 @@
                         @if($product->requires_maintenance && !empty($product->maintenance_prices))
                             @php
                                 $maintenancePrices = $product->maintenance_prices ?? [];
-                                if (!empty($maintenancePrices)) {
-                                    ksort($maintenancePrices);
-                                }
                             @endphp
                             <select name="maintenance_year_{{ $product->product_id }}" data-maintenance-select>
                                 @for($year = 1; $year <= 5; $year++)
@@ -91,7 +89,7 @@
                                     @endphp
                                     <option value="{{ $year }}"
                                             data-price="{{ $yearPrice !== null ? number_format((float) $yearPrice, 2, '.', '') : '' }}"
-                                            {{ $year === (int) array_key_first($maintenancePrices) ? 'selected' : '' }}
+                                            {{ $year === (int) ($defaultMaintenanceYear ?? 1) ? 'selected' : '' }}
                                             {{ $yearPrice === null ? 'disabled' : '' }}>
                                         Year {{ $year }}{{ $yearPrice !== null ? ' - RM ' . number_format((float) $yearPrice, 2) : '' }}
                                     </option>

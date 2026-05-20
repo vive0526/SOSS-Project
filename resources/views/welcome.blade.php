@@ -88,6 +88,17 @@
                     <div class="welcome-panel__list">
                         @forelse($featuredProducts as $product)
                             <div class="welcome-panel__item">
+                                @php
+                                    $displayPrice = $product->price;
+                                    $displayPricePrefix = '';
+                                    if ($product->requires_maintenance && !empty($product->maintenance_prices)) {
+                                        $maintenancePrices = $product->maintenance_prices ?? [];
+                                        if (!empty($maintenancePrices)) {
+                                            $displayPrice = min($maintenancePrices);
+                                            $displayPricePrefix = 'From ';
+                                        }
+                                    }
+                                @endphp
                                 <div class="welcome-panel__thumb">
                                     @if($product->image)
                                         <img src="{{ asset('storage/' . $product->image) }}" alt="{{ $product->name }}">
@@ -102,7 +113,7 @@
                                     </div>
                                 </div>
                                 <div class="welcome-panel__price">
-                                    RM {{ number_format((float) $product->price, 2) }}
+                                    {{ $displayPrice !== null ? $displayPricePrefix . 'RM ' . number_format((float) $displayPrice, 2) : 'N/A' }}
                                 </div>
                             </div>
                         @empty
@@ -187,7 +198,18 @@
                         </p>
                         <div class="welcome-product-card__footer">
                             <div class="welcome-product-card__price">
-                                RM {{ number_format((float) $product->price, 2) }}
+                                @php
+                                    $displayPrice = $product->price;
+                                    $displayPricePrefix = '';
+                                    if ($product->requires_maintenance && !empty($product->maintenance_prices)) {
+                                        $maintenancePrices = $product->maintenance_prices ?? [];
+                                        if (!empty($maintenancePrices)) {
+                                            $displayPrice = min($maintenancePrices);
+                                            $displayPricePrefix = 'From ';
+                                        }
+                                    }
+                                @endphp
+                                {{ $displayPrice !== null ? $displayPricePrefix . 'RM ' . number_format((float) $displayPrice, 2) : 'N/A' }}
                             </div>
                             <a href="{{ route('login') }}" class="btn btn-primary">
                                 Shop Now

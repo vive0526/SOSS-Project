@@ -138,6 +138,14 @@ class CustomerOrderController extends Controller
                         $newStock = $previousStock + (int) $item->quantity;
 
                         $product->stock_quantity = $newStock;
+
+                        $maintenanceYear = $item->maintenance_year !== null ? (int) $item->maintenance_year : null;
+                        if ($maintenanceYear && (bool) ($product->requires_maintenance ?? false)) {
+                            $stocks = $product->maintenance_stocks ?? [];
+                            $current = (int) ($stocks[$maintenanceYear] ?? $stocks[(string) $maintenanceYear] ?? 0);
+                            $stocks[$maintenanceYear] = $current + (int) $item->quantity;
+                            $product->maintenance_stocks = $stocks;
+                        }
                         $product->save();
 
                         InventoryMovement::create([
@@ -169,6 +177,14 @@ class CustomerOrderController extends Controller
                         $qty = (int) $item->quantity;
                         $currentReserved = (int) ($product->reserved_quantity ?? 0);
                         $product->reserved_quantity = max(0, $currentReserved - $qty);
+
+                        $maintenanceYear = $item->maintenance_year !== null ? (int) $item->maintenance_year : null;
+                        if ($maintenanceYear && (bool) ($product->requires_maintenance ?? false)) {
+                            $reservedMap = $product->maintenance_reserved_quantities ?? [];
+                            $currentYearReserved = (int) ($reservedMap[$maintenanceYear] ?? $reservedMap[(string) $maintenanceYear] ?? 0);
+                            $reservedMap[$maintenanceYear] = max(0, $currentYearReserved - $qty);
+                            $product->maintenance_reserved_quantities = $reservedMap;
+                        }
                         $product->save();
                     }
                 }

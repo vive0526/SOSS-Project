@@ -43,12 +43,12 @@ class ProductController extends Controller
 
         $products = Product::with('category')->orderBy('name')->get();
         $lowStockProducts = Product::with('category')
-            ->whereRaw('(stock_quantity - reserved_quantity) > 0')
-            ->whereRaw('(stock_quantity - reserved_quantity) <= ?', [$threshold])
-            ->orderByRaw('(stock_quantity - reserved_quantity) asc')
+            ->whereRaw('(stock_quantity - COALESCE(reserved_quantity, 0)) > 0')
+            ->whereRaw('(stock_quantity - COALESCE(reserved_quantity, 0)) <= ?', [$threshold])
+            ->orderByRaw('(stock_quantity - COALESCE(reserved_quantity, 0)) asc')
             ->get();
         $outOfStockProducts = Product::with('category')
-            ->whereRaw('(stock_quantity - reserved_quantity) <= 0')
+            ->whereRaw('(stock_quantity - COALESCE(reserved_quantity, 0)) <= 0')
             ->orderBy('name')
             ->get();
 
@@ -122,17 +122,21 @@ class ProductController extends Controller
 
     private function validatedProductData(Request $request): array
     {
+        $treePlantingCategoryId = 5;
+        $forceMaintenance = (int) $request->input('category_id') === $treePlantingCategoryId;
+
         $rules = [
             'name' => 'required|string',
             'description' => 'required|string',
-            'price' => 'required|numeric',
-            'stock_quantity' => 'required|integer',
+            'price' => 'nullable|numeric|min:0',
+            'stock_quantity' => 'nullable|integer|min:0',
             'category_id' => 'nullable|exists:categories,id',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
-            'requires_maintenance' => 'nullable|boolean',
             'maintenance_years' => 'nullable|integer|min:1|max:5',
             'maintenance_prices' => 'nullable|array',
             'maintenance_prices.*' => 'nullable|numeric|min:0',
+            'maintenance_stocks' => 'nullable|array',
+            'maintenance_stocks.*' => 'nullable|integer|min:0',
         ];
 
         if (Schema::hasColumn('products', 'product_type')) {
@@ -141,8 +145,17 @@ class ProductController extends Controller
 
         $validator = Validator::make($request->all(), $rules);
 
-        $validator->after(function ($validator) use ($request) {
-            if (!$request->boolean('requires_maintenance')) {
+        $validator->after(function ($validator) use ($request, $forceMaintenance) {
+            if (!$forceMaintenance) {
+                $price = $request->input('price');
+                if ($price === null || $price === '') {
+                    $validator->errors()->add('price', 'Enter a price for the product.');
+                }
+
+                $stock = $request->input('stock_quantity');
+                if ($stock === null || $stock === '') {
+                    $validator->errors()->add('stock_quantity', 'Enter a stock quantity for the product.');
+                }
                 return;
             }
 
@@ -157,29 +170,49 @@ class ProductController extends Controller
                 if ($price === null || $price === '') {
                     $validator->errors()->add("maintenance_prices.$year", "Enter a price for year {$year}.");
                 }
+
+                $stock = $request->input("maintenance_stocks.$year");
+                if ($stock === null || $stock === '') {
+                    $validator->errors()->add("maintenance_stocks.$year", "Enter a stock quantity for year {$year}.");
+                }
             }
         });
 
         $data = $validator->validate();
         unset($data['image']);
 
-        $data['requires_maintenance'] = (bool) ($data['requires_maintenance'] ?? false);
+        $data['requires_maintenance'] = $forceMaintenance;
 
         if (!$data['requires_maintenance']) {
             $data['maintenance_years'] = null;
             $data['maintenance_prices'] = null;
+            $data['maintenance_stocks'] = null;
             return $data;
         }
 
         $years = (int) ($data['maintenance_years'] ?? 0);
         $prices = [];
+        $stocks = [];
+        $sumStock = 0;
         for ($year = 1; $year <= $years; $year++) {
             $priceValue = $request->input("maintenance_prices.$year");
             if ($priceValue !== null && $priceValue !== '') {
                 $prices[$year] = (float) $priceValue;
             }
+
+            $stockValue = $request->input("maintenance_stocks.$year");
+            if ($stockValue !== null && $stockValue !== '') {
+                $stocks[$year] = (int) $stockValue;
+                $sumStock += (int) $stockValue;
+            }
         }
         $data['maintenance_prices'] = $prices;
+        $data['maintenance_stocks'] = $stocks;
+        $data['stock_quantity'] = $sumStock;
+
+        if (!empty($prices)) {
+            $data['price'] = (float) min($prices);
+        }
 
         return $data;
     }

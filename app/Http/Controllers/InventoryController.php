@@ -12,12 +12,12 @@ class InventoryController extends Controller
     {
         $products = Product::with('category')->orderBy('name')->get();
         $lowStockProducts = Product::with('category')
-            ->whereRaw('(stock_quantity - reserved_quantity) > 0')
-            ->whereRaw('(stock_quantity - reserved_quantity) <= reorder_level')
-            ->orderByRaw('(stock_quantity - reserved_quantity) asc')
+            ->whereRaw('(stock_quantity - COALESCE(reserved_quantity, 0)) > 0')
+            ->whereRaw('(stock_quantity - COALESCE(reserved_quantity, 0)) <= reorder_level')
+            ->orderByRaw('(stock_quantity - COALESCE(reserved_quantity, 0)) asc')
             ->get();
         $outOfStockProducts = Product::with('category')
-            ->whereRaw('(stock_quantity - reserved_quantity) <= 0')
+            ->whereRaw('(stock_quantity - COALESCE(reserved_quantity, 0)) <= 0')
             ->orderBy('name')
             ->get();
 

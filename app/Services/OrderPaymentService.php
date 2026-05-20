@@ -9,6 +9,7 @@ use App\Models\Product;
 use App\Notifications\OrderPlacedNotification;
 use App\Notifications\OrderPaymentVerifiedNotification;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class OrderPaymentService
 {
@@ -76,6 +77,7 @@ class OrderPaymentService
                 }
 
                 $requestedQty = (int) $item->quantity;
+                $maintenanceYear = $item->maintenance_year !== null ? (int) $item->maintenance_year : null;
 
                 if ((int) $product->stock_quantity < $requestedQty) {
                     $insufficient[] = $product->name;
@@ -85,6 +87,19 @@ class OrderPaymentService
                 if ($usesReservation && (int) ($product->reserved_quantity ?? 0) < $requestedQty) {
                     $insufficient[] = $product->name;
                     continue;
+                }
+
+                if ($maintenanceYear && (bool) ($product->requires_maintenance ?? false)) {
+                    $yearStock = $product->maintenanceStockForYear($maintenanceYear);
+                    if ($yearStock < $requestedQty) {
+                        $insufficient[] = $product->name . " (maintenance year {$maintenanceYear})";
+                        continue;
+                    }
+
+                    if ($usesReservation && $product->reservedMaintenanceForYear($maintenanceYear) < $requestedQty) {
+                        $insufficient[] = $product->name . " (maintenance year {$maintenanceYear})";
+                        continue;
+                    }
                 }
             }
 
@@ -128,12 +143,27 @@ class OrderPaymentService
                 $previousStock = (int) $product->stock_quantity;
                 $requestedQty = (int) $item->quantity;
                 $newStock = $previousStock - $requestedQty;
+                $maintenanceYear = $item->maintenance_year !== null ? (int) $item->maintenance_year : null;
 
                 if ($usesReservation) {
                     $product->reserved_quantity = (int) ($product->reserved_quantity ?? 0) - $requestedQty;
                 }
 
                 $product->stock_quantity = $newStock;
+
+                if ($maintenanceYear && (bool) ($product->requires_maintenance ?? false)) {
+                    $stocks = $product->maintenance_stocks ?? [];
+                    $current = (int) ($stocks[$maintenanceYear] ?? $stocks[(string) $maintenanceYear] ?? 0);
+                    $stocks[$maintenanceYear] = max(0, $current - $requestedQty);
+                    $product->maintenance_stocks = $stocks;
+
+                    if ($usesReservation) {
+                        $reserved = $product->maintenance_reserved_quantities ?? [];
+                        $currentReserved = (int) ($reserved[$maintenanceYear] ?? $reserved[(string) $maintenanceYear] ?? 0);
+                        $reserved[$maintenanceYear] = max(0, $currentReserved - $requestedQty);
+                        $product->maintenance_reserved_quantities = $reserved;
+                    }
+                }
                 $product->save();
 
                 InventoryMovement::create([
@@ -158,20 +188,28 @@ class OrderPaymentService
         });
 
         if ($verified) {
-            $freshOrder = Order::query()
-                ->with('customer')
-                ->whereKey($order->getKey())
-                ->first();
+            try {
+                $freshOrder = Order::query()
+                    ->with('customer')
+                    ->whereKey($order->getKey())
+                    ->first();
 
-            $customer = $freshOrder?->customer;
-            if ($freshOrder && $customer) {
-                $isStripe = in_array((string) $freshOrder->payment_method, ['stripe_card', 'stripe_fpx'], true);
-                if ($isStripe) {
-                    // For Stripe, only send the "order received" invoice after payment is verified.
-                    $customer->notify(new OrderPlacedNotification($freshOrder));
-                } else {
-                    $customer->notify(new OrderPaymentVerifiedNotification($freshOrder));
+                $customer = $freshOrder?->customer;
+                if ($freshOrder && $customer) {
+                    $isStripe = in_array((string) $freshOrder->payment_method, ['stripe_card', 'stripe_fpx'], true);
+                    if ($isStripe) {
+                        // For Stripe, only send the "order received" invoice after payment is verified.
+                        $customer->notify(new OrderPlacedNotification($freshOrder));
+                    } else {
+                        $customer->notify(new OrderPaymentVerifiedNotification($freshOrder));
+                    }
                 }
+            } catch (\Throwable $e) {
+                // Notifications should never break the payment verification flow.
+                Log::error('Order payment verified, but notification failed.', [
+                    'order_id' => (string) $order->getKey(),
+                    'error' => $e->getMessage(),
+                ]);
             }
         }
 

@@ -76,6 +76,14 @@ class StripeReservationExpiryService
                         $qty = (int) $item->quantity;
                         $currentReserved = (int) ($product->reserved_quantity ?? 0);
                         $product->reserved_quantity = max(0, $currentReserved - $qty);
+
+                        $maintenanceYear = $item->maintenance_year !== null ? (int) $item->maintenance_year : null;
+                        if ($maintenanceYear && (bool) ($product->requires_maintenance ?? false)) {
+                            $reservedMap = $product->maintenance_reserved_quantities ?? [];
+                            $currentYearReserved = (int) ($reservedMap[$maintenanceYear] ?? $reservedMap[(string) $maintenanceYear] ?? 0);
+                            $reservedMap[$maintenanceYear] = max(0, $currentYearReserved - $qty);
+                            $product->maintenance_reserved_quantities = $reservedMap;
+                        }
                         $product->save();
                     }
                 }
