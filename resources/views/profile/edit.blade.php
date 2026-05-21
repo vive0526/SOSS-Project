@@ -17,6 +17,7 @@
             @if(auth()->check() && auth()->user()->role === 'customer')
                 <div class="customer-profile__intro-actions">
                     <a class="btn btn-outline" href="{{ route('customer.products.index') }}">Browse Products</a>
+                    <a class="btn btn-outline" href="{{ route('customer.addresses.index') }}">My Addresses</a>
                 </div>
             @endif
         </div>
@@ -104,11 +105,17 @@
                     </div>
                     <div>
                         <label for="shipping_state">State</label>
-                        <input type="text"
-                               id="shipping_state"
-                               name="shipping_state"
-                               value="{{ old('shipping_state', $user->shipping_state) }}"
-                               {{ $requiresCheckoutProfile ? 'required' : '' }}>
+                        <select id="shipping_state"
+                                name="shipping_state"
+                                {{ $requiresCheckoutProfile ? 'required' : '' }}>
+                            <option value="">Select a state</option>
+                            @foreach(($stateOptions ?? []) as $stateKey => $stateLabel)
+                                <option value="{{ $stateKey }}"
+                                    {{ old('shipping_state', $selectedStateKey ?? $user->shipping_state) === $stateKey ? 'selected' : '' }}>
+                                    {{ $stateLabel }}
+                                </option>
+                            @endforeach
+                        </select>
                     </div>
                 </div>
 

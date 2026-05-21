@@ -1,9 +1,10 @@
 @extends('layouts.admin')
 
+@section('title', 'Categories')
+@section('page_title', 'Categories')
+@section('page_subtitle', 'Manage product categories')
+
 @section('content')
-
-<h2>Categories</h2>
-
 <div class="admin-card">
     <a class="btn-add" href="{{ route('categories.create') }}">Add Category</a>
 
@@ -15,7 +16,7 @@
         <p style="color: red;">{{ session('error') }}</p>
     @endif
 
-    <table border="1" cellpadding="10" cellspacing="0">
+    <table>
         <thead>
             <tr>
                 <th>No</th>
@@ -26,16 +27,17 @@
         <tbody>
             @foreach($categories as $index => $category)
                 <tr>
-                    <td>{{ $index + 1 }}</td>
+                    <td>{{ ($categories->firstItem() ?? 0) + $index }}</td>
                     <td>{{ $category->name }}</td>
                     <td>
-                        <a href="{{ route('categories.edit', $category) }}">Edit</a>
+                        <a class="btn-admin btn-edit" href="{{ route('categories.edit', $category) }}">Edit</a>
                         <form method="POST"
                               action="{{ route('categories.destroy', $category) }}"
                               style="display:inline;">
                             @csrf
                             @method('DELETE')
                             <button type="submit"
+                                    class="btn-admin btn-delete"
                                     onclick="return confirm('Delete this category?')">
                                 Delete
                             </button>
@@ -45,6 +47,10 @@
             @endforeach
         </tbody>
     </table>
+
+    <div style="margin-top: 12px;">
+        {{ $categories->links('pagination.admin') }}
+    </div>
 </div>
 
 @endsection

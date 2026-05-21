@@ -10,7 +10,7 @@ class OperatingUnitController extends Controller
 {
     public function index()
     {
-        $units = OperatingUnit::with('region')->orderBy('id')->get();
+        $units = OperatingUnit::with('region')->orderBy('id')->paginate(20)->withQueryString();
         return view('operating_units.index', compact('units'));
     }
 

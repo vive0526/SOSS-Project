@@ -15,10 +15,10 @@ class UserController extends Controller
     {
         if (auth()->user()->role === 'admin') {
             // Admin sees all users
-            $users = User::orderBy('user_id')->get();
+            $users = User::orderBy('user_id')->paginate(20)->withQueryString();
         } else {
             // Staff sees all customer users
-            $users = User::where('role', 'customer')->orderBy('user_id')->get();
+            $users = User::where('role', 'customer')->orderBy('user_id')->paginate(20)->withQueryString();
         }
 
         return view('users.index', compact('users'));

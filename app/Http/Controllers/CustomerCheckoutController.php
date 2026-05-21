@@ -11,21 +11,47 @@ use App\Models\OrderStatusHistory;
 use App\Models\Product;
 use App\Notifications\CompleteProfileNotification;
 use App\Notifications\OrderPlacedNotification;
+use App\Services\StripeReservationExpiryService;
+use App\Models\AppSetting;
+use App\Models\CustomerAddress;
+use App\Models\ShippingRate;
+use App\Support\MalaysiaStates;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\Rule;
 
 class CustomerCheckoutController extends Controller
 {
-    private const SHIPPING_FEE_PENINSULAR = 5.00;
-
-    private const TAX_RATE = 0.06;
+    private const FALLBACK_SHIPPING_FEE = 5.00;
+    private const FALLBACK_TAX_RATE = 0.06;
 
     private const PAYMENT_METHODS = [
         'cash_on_delivery' => 'Cash on Delivery',
         'stripe_card' => 'Card (Stripe)',
         'stripe_fpx' => 'FPX (Stripe)',
     ];
+
+    private function isStripeConfigured(): bool
+    {
+        $secret = config('services.stripe.secret');
+
+        return is_string($secret) && trim($secret) !== '';
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function enabledPaymentMethods(): array
+    {
+        $methods = self::PAYMENT_METHODS;
+
+        if (!$this->isStripeConfigured()) {
+            unset($methods['stripe_card'], $methods['stripe_fpx']);
+        }
+
+        return $methods;
+    }
 
     public function index(Request $request)
     {
@@ -61,9 +87,17 @@ class CustomerCheckoutController extends Controller
             }
         }
 
-        $state = (string) old('shipping_state', $request->user()->shipping_state);
-        $country = (string) old('shipping_country', $request->user()->shipping_country ?? 'Malaysia');
-        $shippingFee = $this->resolveShippingFee($state, $country);
+        $address = $this->resolveCheckoutAddress($request);
+        if ($address === null) {
+            return redirect()
+                ->route('customer.addresses.create')
+                ->withErrors(['address' => 'Please add at least one delivery address before checkout.']);
+        }
+
+        $request->session()->put('checkout_address_id', $address->getKey());
+
+        $shippingFee = $this->resolveShippingFee((string) $address->state_key, (string) $address->country);
+        $taxRate = $this->resolveTaxRate();
 
         $claimedCoupons = CouponClaim::query()
             ->where('user_id', $request->user()->getKey())
@@ -88,7 +122,8 @@ class CustomerCheckoutController extends Controller
         }
 
         $taxable = max(0.0, ((float) $priced['subtotal']) - $discountPreview);
-        $taxPreview = $this->roundMoney($taxable * self::TAX_RATE);
+        $taxPreview = $this->roundMoney($taxable * $taxRate);
+        $stripeConfigured = $this->isStripeConfigured();
 
         return view('customer.checkout.index', [
             'cart' => $priced['cart'],
@@ -96,15 +131,25 @@ class CustomerCheckoutController extends Controller
             'shippingFee' => $shippingFee,
             'discount' => $discountPreview,
             'tax' => $taxPreview,
+            'taxRate' => $taxRate,
             'total' => $taxable + $taxPreview + $shippingFee,
-            'paymentMethods' => self::PAYMENT_METHODS,
+            'paymentMethods' => $this->enabledPaymentMethods(),
+            'stripeConfigured' => $stripeConfigured,
             'customer' => $request->user(),
             'claimedCoupons' => $claimedCoupons,
             'selectedCouponCode' => $selectedCouponCode,
+            'addresses' => CustomerAddress::query()
+                ->where('user_id', $request->user()->getKey())
+                ->orderByDesc('is_default')
+                ->orderByDesc('id')
+                ->get(),
+            'selectedAddress' => $address,
+            'shippingPolicyText' => AppSetting::getString('shipping_policy_text', ''),
+            'taxPolicyText' => AppSetting::getString('tax_policy_text', ''),
         ]);
     }
 
-    public function place(Request $request)
+    public function place(Request $request, StripeReservationExpiryService $stripeReservationExpiryService)
     {
         $cart = $request->session()->get('cart', []);
         if (empty($cart)) {
@@ -117,17 +162,29 @@ class CustomerCheckoutController extends Controller
             return $profileRedirect;
         }
 
+        $stripeReservationExpiryService->expireDueReservationsBestEffort();
+
+        $addressId = (string) ($request->input('address_id') ?: $request->session()->get('checkout_address_id', ''));
+
+        $paymentMethods = $this->enabledPaymentMethods();
+
         $data = $request->validate([
-            'shipping_name' => 'required|string|max:120',
-            'shipping_phone' => 'required|string|max:60',
-            'shipping_address' => 'required|string|max:255',
-            'shipping_city' => 'required|string|max:120',
-            'shipping_state' => 'required|string|max:120',
-            'shipping_postcode' => 'required|string|max:30',
-            'shipping_country' => 'required|string|max:120',
-            'payment_method' => 'required|in:' . implode(',', array_keys(self::PAYMENT_METHODS)),
+            'address_id' => 'nullable|string',
+            'payment_method' => 'required|in:' . implode(',', array_keys($paymentMethods)),
             'coupon_code' => 'nullable|string|max:32',
         ]);
+
+        /** @var \App\Models\CustomerAddress|null $address */
+        $address = CustomerAddress::query()
+            ->where('id', $addressId)
+            ->where('user_id', $request->user()->getKey())
+            ->first();
+
+        if (!$address) {
+            return redirect()
+                ->route('customer.checkout.index')
+                ->withErrors(['address' => 'Please select a valid delivery address.']);
+        }
 
         $priced = $this->priceCartFromDatabase($cart);
         if (!$priced['ok']) {
@@ -156,7 +213,7 @@ class CustomerCheckoutController extends Controller
         $reservationExpiresAt = $isStripe ? now()->addMinutes(5) : null;
 
         try {
-            $order = DB::transaction(function () use ($request, $data, $priced, $cart, $reservedAt, $reservationExpiresAt, $isStripe) {
+            $order = DB::transaction(function () use ($request, $data, $priced, $cart, $reservedAt, $reservationExpiresAt, $isStripe, $address) {
                 $productIds = collect($cart)->pluck('product_id')->filter()->unique()->values()->all();
                 $products = Product::query()
                     ->whereIn('product_id', $productIds)
@@ -240,7 +297,8 @@ class CustomerCheckoutController extends Controller
                     $product->save();
                 }
 
-                $shippingFee = $this->resolveShippingFee((string) $data['shipping_state'], (string) $data['shipping_country']);
+                $shippingFee = $this->resolveShippingFee((string) $address->state_key, (string) $address->country);
+                $taxRate = $this->resolveTaxRate();
 
                 $couponCode = isset($data['coupon_code']) ? trim((string) $data['coupon_code']) : '';
                 $coupon = null;
@@ -262,7 +320,7 @@ class CustomerCheckoutController extends Controller
                 }
 
                 $taxableBase = max(0.0, ((float) $pricedLocked['subtotal']) - $discountAmount);
-                $taxAmount = $this->roundMoney($taxableBase * self::TAX_RATE);
+                $taxAmount = $this->roundMoney($taxableBase * $taxRate);
                 $grandTotal = $taxableBase + $taxAmount + $shippingFee;
 
                 $order = Order::create([
@@ -276,18 +334,18 @@ class CustomerCheckoutController extends Controller
                     'order_discount_type' => $orderDiscountType,
                     'order_discount_value' => $orderDiscountValue,
                     'tax_amount' => $taxAmount,
-                    'tax_rate' => self::TAX_RATE,
+                    'tax_rate' => $taxRate,
                     'total_amount' => $grandTotal,
                     'shipping_fee' => $shippingFee,
                     'payment_method' => $data['payment_method'],
                     'payment_status' => $isStripe ? 'pending' : 'unpaid',
-                    'shipping_name' => $data['shipping_name'],
-                    'shipping_phone' => $data['shipping_phone'],
-                    'shipping_address' => $data['shipping_address'],
-                    'shipping_city' => $data['shipping_city'],
-                    'shipping_state' => $data['shipping_state'],
-                    'shipping_postcode' => $data['shipping_postcode'],
-                    'shipping_country' => $data['shipping_country'],
+                    'shipping_name' => $address->recipient_name,
+                    'shipping_phone' => $address->phone,
+                    'shipping_address' => $address->address_line,
+                    'shipping_city' => $address->city,
+                    'shipping_state' => $address->state_key,
+                    'shipping_postcode' => $address->postcode,
+                    'shipping_country' => $address->country,
                     'reserved_at' => $reservedAt,
                     'reservation_expires_at' => $reservationExpiresAt,
                 ]);
@@ -584,19 +642,93 @@ class CustomerCheckoutController extends Controller
     private function resolveShippingFee(string $state, string $country): float
     {
         $countryNorm = $this->normalizeLocation($country);
-        $stateNorm = $this->normalizeLocation($state);
-
         if ($countryNorm !== '' && !str_contains($countryNorm, 'malaysia')) {
-            return self::SHIPPING_FEE_PENINSULAR;
+            return self::FALLBACK_SHIPPING_FEE;
         }
 
-        foreach (['sabah', 'sarawak', 'labuan'] as $freeState) {
-            if ($stateNorm === $freeState || str_contains($stateNorm, $freeState)) {
-                return 0.0;
+        $stateKey = MalaysiaStates::normalize($state) ?? $state;
+        if (!in_array($stateKey, MalaysiaStates::keys(), true)) {
+            return self::FALLBACK_SHIPPING_FEE;
+        }
+
+        /** @var \App\Models\ShippingRate|null $rate */
+        $rate = ShippingRate::query()
+            ->where('state_key', $stateKey)
+            ->where('active', true)
+            ->first();
+
+        if (!$rate) {
+            return self::FALLBACK_SHIPPING_FEE;
+        }
+
+        return (float) $rate->shipping_fee;
+    }
+
+    private function resolveTaxRate(): float
+    {
+        $rate = AppSetting::getDecimal('malaysia_tax_rate', self::FALLBACK_TAX_RATE);
+
+        if (!is_finite($rate) || $rate < 0) {
+            return self::FALLBACK_TAX_RATE;
+        }
+
+        return min(1.0, $rate);
+    }
+
+    private function resolveCheckoutAddress(Request $request): ?CustomerAddress
+    {
+        $user = $request->user();
+        if (!$user) {
+            return null;
+        }
+
+        $queryId = $request->query('address_id');
+        $sessionId = $request->session()->get('checkout_address_id');
+
+        $candidateId = $queryId ?: $sessionId;
+
+        if ($candidateId) {
+            $found = CustomerAddress::query()
+                ->where('id', $candidateId)
+                ->where('user_id', $user->getKey())
+                ->first();
+            if ($found) {
+                return $found;
             }
         }
 
-        return self::SHIPPING_FEE_PENINSULAR;
+        $default = CustomerAddress::query()
+            ->where('user_id', $user->getKey())
+            ->orderByDesc('is_default')
+            ->orderByDesc('id')
+            ->first();
+
+        if ($default) {
+            return $default;
+        }
+
+        // Backward-compat: create first address from legacy user shipping fields if available.
+        if ($user->isCheckoutProfileComplete() && filled($user->shipping_address)) {
+            $stateKey = MalaysiaStates::normalize($user->shipping_state) ?? null;
+            if ($stateKey === null) {
+                return null;
+            }
+
+            return CustomerAddress::create([
+                'user_id' => $user->getKey(),
+                'label' => 'Default',
+                'recipient_name' => $user->name,
+                'phone' => (string) $user->phone,
+                'address_line' => (string) $user->shipping_address,
+                'city' => (string) $user->shipping_city,
+                'state_key' => $stateKey,
+                'postcode' => (string) $user->shipping_postcode,
+                'country' => (string) ($user->shipping_country ?: 'Malaysia'),
+                'is_default' => true,
+            ]);
+        }
+
+        return null;
     }
 
     /**
@@ -782,9 +914,9 @@ class CustomerCheckoutController extends Controller
         }
 
         return redirect()
-            ->route('profile.edit')
+            ->route('customer.addresses.create')
             ->withErrors([
-                'profile' => 'Please update your phone number and shipping address before checkout.',
+                'profile' => 'Please add a delivery address before checkout.',
             ]);
     }
 }

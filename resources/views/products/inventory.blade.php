@@ -16,7 +16,10 @@
                        value="{{ $threshold }}"
                        style="width:140px;">
             </div>
-            <button type="submit" class="btn btn-primary">Apply</button>
+            <div style="margin-left:auto; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                <button type="submit" class="btn btn-primary">Apply</button>
+                <a class="btn btn-outline" href="{{ route('products.inventory') }}">Reset</a>
+            </div>
         </form>
     </div>
 
@@ -67,7 +70,7 @@
                     }
                 @endphp
                 <tr>
-                    <td>{{ $index + 1 }}</td>
+                    <td>{{ ($products->firstItem() ?? 0) + $index }}</td>
                     <td>{{ $product->name }}</td>
                     <td>{{ $product->category?->name ?? 'Uncategorized' }}</td>
                     <td>{{ $product->stock_quantity }}</td>
@@ -78,11 +81,15 @@
             @endforeach
             </tbody>
         </table>
+
+        <div style="margin-top:12px;">
+            {{ $products->links('pagination.admin') }}
+        </div>
     </div>
 
     <div class="admin-card">
         <h3 style="margin-bottom: 12px;">Low Stock Products</h3>
-        @if($lowStockProducts->isEmpty())
+        @if($lowStockCount === 0)
             <p>No low stock products at the current threshold.</p>
         @else
             <table>
@@ -103,7 +110,7 @@
                         $available = $product->availableStock();
                     @endphp
                     <tr>
-                        <td>{{ $index + 1 }}</td>
+                        <td>{{ ($lowStockProducts->firstItem() ?? 0) + $index }}</td>
                         <td>{{ $product->name }}</td>
                         <td>{{ $product->category?->name ?? 'Uncategorized' }}</td>
                         <td>{{ $product->stock_quantity }}</td>
@@ -113,12 +120,16 @@
                 @endforeach
                 </tbody>
             </table>
+
+            <div style="margin-top:12px;">
+                {{ $lowStockProducts->links('pagination.admin') }}
+            </div>
         @endif
     </div>
 
     <div class="admin-card">
         <h3 style="margin-bottom: 12px;">Out of Stock Products</h3>
-        @if($outOfStockProducts->isEmpty())
+        @if($outOfStockCount === 0)
             <p>No out of stock products.</p>
         @else
             <table>
@@ -139,7 +150,7 @@
                         $available = $product->availableStock();
                     @endphp
                     <tr>
-                        <td>{{ $index + 1 }}</td>
+                        <td>{{ ($outOfStockProducts->firstItem() ?? 0) + $index }}</td>
                         <td>{{ $product->name }}</td>
                         <td>{{ $product->category?->name ?? 'Uncategorized' }}</td>
                         <td>{{ $product->stock_quantity }}</td>
@@ -149,6 +160,10 @@
                 @endforeach
                 </tbody>
             </table>
+
+            <div style="margin-top:12px;">
+                {{ $outOfStockProducts->links('pagination.admin') }}
+            </div>
         @endif
     </div>
 @endsection

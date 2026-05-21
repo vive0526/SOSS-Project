@@ -5,12 +5,25 @@ namespace App\Services;
 use App\Models\Order;
 use App\Models\Product;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class StripeReservationExpiryService
 {
     public function __construct(private readonly OrderStateEngine $orderStateEngine)
     {
+    }
+
+    public function expireDueReservationsBestEffort(?Carbon $now = null): int
+    {
+        $now = $now ?: now();
+
+        $cacheKey = 'stripe_reservations:expire_due:cooldown';
+        if (!Cache::add($cacheKey, 1, 55)) {
+            return 0;
+        }
+
+        return $this->expireDueReservations($now);
     }
 
     public function expireDueReservations(?Carbon $now = null): int

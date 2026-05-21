@@ -9,7 +9,7 @@ class CodeController extends Controller
 {
     public function index()
     {
-        $codes = Code::orderBy('id')->get();
+        $codes = Code::orderBy('id')->paginate(20)->withQueryString();
         return view('codes.index', compact('codes'));
     }
 

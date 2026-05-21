@@ -84,6 +84,9 @@
                 @endforelse
             </tbody>
         </table>
+
+        <div style="margin-top:12px;">
+            {{ $requests->links('pagination.admin') }}
+        </div>
     </div>
 @endsection
-

@@ -9,7 +9,7 @@ class CompanyController extends Controller
 {
     public function index()
     {
-        $companies = Company::orderBy('id')->get();
+        $companies = Company::orderBy('id')->paginate(20)->withQueryString();
         return view('companies.index', compact('companies'));
     }
 

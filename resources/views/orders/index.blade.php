@@ -128,7 +128,7 @@
                         };
                     @endphp
                     <tr>
-                        <td>{{ $index + 1 }}</td>
+                        <td>{{ ($orders->firstItem() ?? 0) + $index }}</td>
                         <td>{{ $order->order_number }}</td>
                         <td>{{ $order->customer?->name ?? '-' }}</td>
                         <td><span class="{{ $statusClass }}">{{ ucfirst($order->status) }}</span></td>
@@ -166,6 +166,10 @@
                 @endforelse
             </tbody>
         </table>
+    </div>
+
+    <div style="margin-top: 16px;">
+        {{ $orders->links('pagination.admin') }}
     </div>
 
     <script>

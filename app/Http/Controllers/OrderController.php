@@ -9,6 +9,7 @@ use App\Models\Product;
 use App\Models\User;
 use App\Services\OrderPaymentService;
 use App\Services\OrderStateEngine;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -56,25 +57,60 @@ class OrderController extends Controller
         }
 
         if ($request->filled('search')) {
-            $search = trim($request->input('search'));
-            $query->where(function ($q) use ($search) {
-                $q->where('order_number', 'like', '%' . $search . '%')
-                    ->orWhereHas('customer', function ($customerQuery) use ($search) {
-                        $customerQuery->where('name', 'like', '%' . $search . '%')
-                            ->orWhere('email', 'like', '%' . $search . '%');
-                    });
+            $search = trim((string) $request->input('search'));
+            $isOrderNumberLike = str_starts_with(strtoupper($search), 'ORD-');
+            $isEmailLike = str_contains($search, '@');
+            $likePrefix = $search . '%';
+
+            $query->where(function ($q) use ($search, $isOrderNumberLike, $isEmailLike, $likePrefix) {
+                if ($isOrderNumberLike) {
+                    $q->where('order_number', $search)->orWhere('order_number', 'like', $likePrefix);
+                } else {
+                    $q->where('order_number', 'like', $likePrefix);
+                }
+
+                $q->orWhereHas('customer', function ($customerQuery) use ($isEmailLike, $search, $likePrefix) {
+                    if ($isEmailLike) {
+                        $customerQuery->where('email', 'like', $likePrefix);
+                        return;
+                    }
+
+                    $customerQuery->where('name', 'like', $likePrefix)
+                        ->orWhere('email', 'like', $likePrefix);
+                });
             });
         }
 
-        if ($request->filled('date_from')) {
-            $query->whereDate('created_at', '>=', $request->input('date_from'));
+        $dateFrom = $request->input('date_from');
+        $dateTo = $request->input('date_to');
+        $from = null;
+        $to = null;
+
+        if (is_string($dateFrom) && $dateFrom !== '') {
+            try {
+                $from = CarbonImmutable::createFromFormat('Y-m-d', $dateFrom)->startOfDay();
+            } catch (\Throwable) {
+                $from = null;
+            }
         }
 
-        if ($request->filled('date_to')) {
-            $query->whereDate('created_at', '<=', $request->input('date_to'));
+        if (is_string($dateTo) && $dateTo !== '') {
+            try {
+                $to = CarbonImmutable::createFromFormat('Y-m-d', $dateTo)->endOfDay();
+            } catch (\Throwable) {
+                $to = null;
+            }
         }
 
-        $orders = $query->get();
+        if ($from && $to) {
+            $query->whereBetween('created_at', [$from, $to]);
+        } elseif ($from) {
+            $query->where('created_at', '>=', $from);
+        } elseif ($to) {
+            $query->where('created_at', '<=', $to);
+        }
+
+        $orders = $query->paginate(20)->withQueryString();
         $statusCounts = Order::select('status', DB::raw('count(*) as total'))
             ->groupBy('status')
             ->pluck('total', 'status');

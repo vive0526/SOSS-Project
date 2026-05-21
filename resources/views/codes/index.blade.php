@@ -1,9 +1,10 @@
 @extends('layouts.admin')
 
+@section('title', 'Codes')
+@section('page_title', 'Codes')
+@section('page_subtitle', 'Manage codes and tags used across the system')
+
 @section('content')
-
-<h2>Codes</h2>
-
 <div class="admin-card">
     
   <a class="btn-add" href="{{ route('codes.create') }}">Add Code</a>
@@ -12,7 +13,7 @@
     <p style="color: green;">{{ session('success') }}</p>
 @endif
 
-<table border="1" cellpadding="10" cellspacing="0">
+<table>
     <thead>
         <tr>
             <th>No</th>
@@ -26,12 +27,12 @@
     <tbody>
         @foreach($codes as $index => $code)
         <tr>
-            <td>{{ $index + 1 }}</td>
+            <td>{{ ($codes->firstItem() ?? 0) + $index }}</td>
             <td>{{ $code->code }}</td>
             <td>{{ $code->description }}</td>
             <td>{{ ucfirst($code->status) }}</td>
             <td>
-                <a href="{{ route('codes.edit', $code) }}">Edit</a>
+                <a class="btn-admin btn-edit" href="{{ route('codes.edit', $code) }}">Edit</a>
 
                 @if($code->status === 'active')
                     <form method="POST"
@@ -40,6 +41,7 @@
                         @csrf
                         @method('PATCH')
                         <button type="submit"
+                                class="btn-admin btn-delete"
                                 onclick="return confirm('Deactivate this code?')">
                             deactivate
                         </button>
@@ -50,7 +52,7 @@
                           style="display:inline;">
                         @csrf
                         @method('PATCH')
-                        <button type="submit">Activate</button>
+                        <button type="submit" class="btn-admin btn-activate">Activate</button>
                     </form>
                 @endif
             </td>
@@ -58,5 +60,9 @@
         @endforeach
     </tbody>
 </table>
+
+<div style="margin-top: 12px;">
+    {{ $codes->links('pagination.admin') }}
+</div>
 
 @endsection

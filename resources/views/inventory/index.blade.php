@@ -84,7 +84,7 @@
                     }
                 @endphp
                 <tr>
-                    <td>{{ $index + 1 }}</td>
+                    <td>{{ ($products->firstItem() ?? 0) + $index }}</td>
                     <td>{{ $product->name }}</td>
                     <td>{{ $product->category?->name ?? 'Uncategorized' }}</td>
                     <td>{{ $product->stock_quantity }}</td>
@@ -104,11 +104,15 @@
             @endforeach
             </tbody>
         </table>
+
+        <div style="margin-top:12px;">
+            {{ $products->links('pagination.admin') }}
+        </div>
     </div>
 
     <div class="admin-card">
         <h3 style="margin-bottom: 12px;">Low Stock Alerts</h3>
-        @if($lowStockProducts->isEmpty())
+        @if($lowStockCount === 0)
             <p>No products below reorder level.</p>
         @else
             <table>
@@ -130,7 +134,7 @@
                         $available = $product->availableStock();
                     @endphp
                     <tr>
-                        <td>{{ $index + 1 }}</td>
+                        <td>{{ ($lowStockProducts->firstItem() ?? 0) + $index }}</td>
                         <td>{{ $product->name }}</td>
                         <td>{{ $product->category?->name ?? 'Uncategorized' }}</td>
                         <td>{{ $product->stock_quantity }}</td>
@@ -141,12 +145,16 @@
                 @endforeach
                 </tbody>
             </table>
+
+            <div style="margin-top:12px;">
+                {{ $lowStockProducts->links('pagination.admin') }}
+            </div>
         @endif
     </div>
 
     <div class="admin-card">
         <h3 style="margin-bottom: 12px;">Out of Stock Products</h3>
-        @if($outOfStockProducts->isEmpty())
+        @if($outOfStockCount === 0)
             <p>No out of stock products.</p>
         @else
             <table>
@@ -168,7 +176,7 @@
                         $available = $product->availableStock();
                     @endphp
                     <tr>
-                        <td>{{ $index + 1 }}</td>
+                        <td>{{ ($outOfStockProducts->firstItem() ?? 0) + $index }}</td>
                         <td>{{ $product->name }}</td>
                         <td>{{ $product->category?->name ?? 'Uncategorized' }}</td>
                         <td>{{ $product->stock_quantity }}</td>
@@ -179,6 +187,10 @@
                 @endforeach
                 </tbody>
             </table>
+
+            <div style="margin-top:12px;">
+                {{ $outOfStockProducts->links('pagination.admin') }}
+            </div>
         @endif
     </div>
 @endsection

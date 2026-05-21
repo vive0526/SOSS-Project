@@ -10,20 +10,29 @@ class InventoryController extends Controller
 {
     public function index()
     {
-        $products = Product::with('category')->orderBy('name')->get();
-        $lowStockProducts = Product::with('category')
+        $totalProducts = Product::count();
+
+        $products = Product::with('category')
+            ->orderBy('name')
+            ->paginate(20, ['*'], 'products_page')
+            ->withQueryString();
+
+        $lowStockProductsQuery = Product::with('category')
             ->whereRaw('(stock_quantity - COALESCE(reserved_quantity, 0)) > 0')
             ->whereRaw('(stock_quantity - COALESCE(reserved_quantity, 0)) <= reorder_level')
-            ->orderByRaw('(stock_quantity - COALESCE(reserved_quantity, 0)) asc')
-            ->get();
-        $outOfStockProducts = Product::with('category')
-            ->whereRaw('(stock_quantity - COALESCE(reserved_quantity, 0)) <= 0')
-            ->orderBy('name')
-            ->get();
+            ->orderByRaw('(stock_quantity - COALESCE(reserved_quantity, 0)) asc');
+        $lowStockCount = (clone $lowStockProductsQuery)->count();
+        $lowStockProducts = $lowStockProductsQuery
+            ->paginate(20, ['*'], 'low_stock_page')
+            ->withQueryString();
 
-        $totalProducts = $products->count();
-        $lowStockCount = $lowStockProducts->count();
-        $outOfStockCount = $outOfStockProducts->count();
+        $outOfStockProductsQuery = Product::with('category')
+            ->whereRaw('(stock_quantity - COALESCE(reserved_quantity, 0)) <= 0')
+            ->orderBy('name');
+        $outOfStockCount = (clone $outOfStockProductsQuery)->count();
+        $outOfStockProducts = $outOfStockProductsQuery
+            ->paginate(20, ['*'], 'out_of_stock_page')
+            ->withQueryString();
 
         return view('inventory.index', compact(
             'products',
@@ -131,7 +140,7 @@ class InventoryController extends Controller
             $query->where('type', $request->input('type'));
         }
 
-        $movements = $query->get();
+        $movements = $query->paginate(20)->withQueryString();
         $products = Product::orderBy('name')->get();
 
         return view('inventory.history', compact('movements', 'products'));
@@ -238,7 +247,10 @@ class InventoryController extends Controller
             ]);
         }
 
-        $products = Product::with('category')->orderBy('name')->get();
+        $products = Product::with('category')
+            ->orderBy('name')
+            ->paginate(20)
+            ->withQueryString();
 
         return view('inventory.reports.levels', compact('products'));
     }
@@ -341,7 +353,8 @@ class InventoryController extends Controller
         $products = Product::with('category')
             ->whereColumn('stock_quantity', '<=', 'reorder_level')
             ->orderBy('stock_quantity')
-            ->get();
+            ->paginate(20)
+            ->withQueryString();
 
         return view('inventory.reports.low-stock', compact('products'));
     }
@@ -443,7 +456,8 @@ class InventoryController extends Controller
 
         $movements = InventoryMovement::with(['product', 'user'])
             ->orderByDesc('created_at')
-            ->get();
+            ->paginate(20)
+            ->withQueryString();
 
         return view('inventory.reports.movements', compact('movements'));
     }

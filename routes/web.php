@@ -22,8 +22,10 @@ use App\Http\Controllers\CustomerStripeCheckoutController;
 use App\Http\Controllers\CustomerCattleRequestController;
 use App\Http\Controllers\CattleRequestController;
 use App\Http\Controllers\CustomerUpdateController;
+use App\Http\Controllers\CustomerAddressController;
 use App\Http\Controllers\StripeRefundController;
 use App\Http\Controllers\StripeWebhookController;
+use App\Http\Controllers\AdminShippingTaxSettingsController;
 use App\Models\Category;
 use App\Models\Product;
 
@@ -98,6 +100,11 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
         ->name('admin.notifications.create');
     Route::post('/admin/notifications', [AdminNotificationController::class, 'store'])
         ->name('admin.notifications.store');
+
+    Route::get('/admin/settings/shipping-tax', [AdminShippingTaxSettingsController::class, 'edit'])
+        ->name('admin.settings.shipping_tax.edit');
+    Route::put('/admin/settings/shipping-tax', [AdminShippingTaxSettingsController::class, 'update'])
+        ->name('admin.settings.shipping_tax.update');
 });
 
 /*
@@ -327,6 +334,21 @@ Route::middleware(['auth', 'verified', 'role:customer'])
     ->prefix('customer')
     ->name('customer.')
     ->group(function () {
+        Route::get('/addresses', [CustomerAddressController::class, 'index'])
+            ->name('addresses.index');
+        Route::get('/addresses/create', [CustomerAddressController::class, 'create'])
+            ->name('addresses.create');
+        Route::post('/addresses', [CustomerAddressController::class, 'store'])
+            ->name('addresses.store');
+        Route::get('/addresses/{address}/edit', [CustomerAddressController::class, 'edit'])
+            ->name('addresses.edit');
+        Route::put('/addresses/{address}', [CustomerAddressController::class, 'update'])
+            ->name('addresses.update');
+        Route::delete('/addresses/{address}', [CustomerAddressController::class, 'destroy'])
+            ->name('addresses.destroy');
+        Route::put('/addresses/{address}/default', [CustomerAddressController::class, 'setDefault'])
+            ->name('addresses.default');
+
         Route::get('/updates', [CustomerUpdateController::class, 'index'])
             ->name('updates.index');
 

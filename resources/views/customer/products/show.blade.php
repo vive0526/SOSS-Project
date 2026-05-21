@@ -74,11 +74,22 @@
                 </div>
 
                 <div class="customer-product-detail__actions">
-                    <a class="btn btn-primary"
-                       href="{{ route('customer.cattle-requests.create', $product) }}"
-                       {{ $availableStock > 0 ? '' : 'aria-disabled=true' }}>
-                        Request Purchase
-                    </a>
+                    @if($availableStock > 0)
+                        <a class="btn btn-primary" href="{{ route('customer.cattle-requests.create', $product) }}">
+                            Request Purchase
+                        </a>
+                    @else
+                        <button type="button"
+                                class="btn btn-primary"
+                                disabled
+                                aria-disabled="true"
+                                title="Out of stock, cannot request">
+                            Request Purchase
+                        </button>
+                        <div style="margin-top:6px; color:#bfbfbf; font-size:0.95rem;">
+                            Out of stock, cannot request.
+                        </div>
+                    @endif
                     <a class="btn btn-outline" href="{{ route('customer.products.index') }}">Back to Products</a>
                 </div>
             @else

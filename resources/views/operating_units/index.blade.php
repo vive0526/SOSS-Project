@@ -1,9 +1,10 @@
 @extends('layouts.admin')
 
+@section('title', 'Operating Units')
+@section('page_title', 'Operating Units')
+@section('page_subtitle', 'Manage mills, estates, and departments')
+
 @section('content')
-
-<h2>Operating Units</h2>
-
 <div class="admin-card">
 
 <a class="btn-add" href="{{ route('operating-units.create') }}">Add Operating Unit</a>
@@ -12,7 +13,7 @@
     <p style="color: green;">{{ session('success') }}</p>
 @endif
 
-<table border="1" cellpadding="10" cellspacing="0">
+<table>
     <thead>
         <tr>
             <th>No</th>
@@ -26,12 +27,12 @@
     <tbody>
         @foreach($units as $index => $unit)
         <tr>
-            <td>{{ $index + 1 }}</td>
+            <td>{{ ($units->firstItem() ?? 0) + $index }}</td>
             <td>{{ $unit->name }}</td>
             <td>{{ $unit->code }}</td>
             <td>{{ ucfirst($unit->status) }}</td>
             <td>
-                <a href="{{ route('operating-units.edit', $unit) }}">Edit</a>
+                <a class="btn-admin btn-edit" href="{{ route('operating-units.edit', $unit) }}">Edit</a>
 
                 @if($unit->status === 'active')
                     <form method="POST"
@@ -40,6 +41,7 @@
                         @csrf
                         @method('PATCH')
                         <button type="submit"
+                                class="btn-admin btn-delete"
                                 onclick="return confirm('Deactivate this operating unit?')">
                             Delete
                         </button>
@@ -50,7 +52,7 @@
                           style="display:inline;">
                         @csrf
                         @method('PATCH')
-                        <button type="submit">
+                        <button type="submit" class="btn-admin btn-activate">
                             Activate
                         </button>
                     </form>
@@ -60,5 +62,9 @@
         @endforeach
     </tbody>
 </table>
+
+<div style="margin-top: 12px;">
+    {{ $units->links('pagination.admin') }}
+</div>
 
 @endsection

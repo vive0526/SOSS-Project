@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use App\Notifications\CompleteProfileNotification;
+use App\Support\MalaysiaStates;
 
 class ProfileController extends Controller
 {
@@ -26,7 +27,14 @@ class ProfileController extends Controller
         }
 
         // For Customer, we show their own profile edit page
-        return view('profile.edit', ['user' => $request->user()]);
+        $user = $request->user();
+        $stateKey = MalaysiaStates::normalize($user->shipping_state) ?? $user->shipping_state;
+
+        return view('profile.edit', [
+            'user' => $user,
+            'stateOptions' => MalaysiaStates::options(),
+            'selectedStateKey' => $stateKey,
+        ]);
     }
 
     /**
@@ -52,6 +60,11 @@ class ProfileController extends Controller
         // Validate profile fields (name, email, phone, shipping address)
         $isCustomer = ($user->role ?? null) === 'customer';
 
+        $normalizedState = MalaysiaStates::normalize($request->input('shipping_state'));
+        if ($normalizedState !== null) {
+            $request->merge(['shipping_state' => $normalizedState]);
+        }
+
         $request->validate([
             'name' => 'required|string|max:255',
             'email' => [
@@ -63,7 +76,12 @@ class ProfileController extends Controller
             'phone' => ($isCustomer ? 'required' : 'nullable') . '|string|max:20',
             'shipping_address' => ($isCustomer ? 'required' : 'nullable') . '|string|max:500',
             'shipping_city' => ($isCustomer ? 'required' : 'nullable') . '|string|max:120',
-            'shipping_state' => ($isCustomer ? 'required' : 'nullable') . '|string|max:120',
+            'shipping_state' => [
+                $isCustomer ? 'required' : 'nullable',
+                'string',
+                'max:120',
+                Rule::in(MalaysiaStates::keys()),
+            ],
             'shipping_postcode' => ($isCustomer ? 'required' : 'nullable') . '|string|max:30',
             'shipping_country' => ($isCustomer ? 'required' : 'nullable') . '|string|max:120',
         ]);

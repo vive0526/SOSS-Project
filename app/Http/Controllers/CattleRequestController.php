@@ -31,7 +31,7 @@ class CattleRequestController extends Controller
             });
         }
 
-        $requests = $query->get();
+        $requests = $query->paginate(20)->withQueryString();
 
         return view('cattle_requests.index', [
             'requests' => $requests,

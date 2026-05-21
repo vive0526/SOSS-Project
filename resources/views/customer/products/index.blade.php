@@ -74,6 +74,16 @@
         </form>
     </div>
 
+    <div class="customer-products-head">
+        <div class="customer-results-meta">
+            @if($products->total() > 0)
+                Showing <strong>{{ $products->firstItem() }}–{{ $products->lastItem() }}</strong> of <strong>{{ $products->total() }}</strong> results
+            @else
+                0 results
+            @endif
+        </div>
+    </div>
+
     <div class="customer-products">
         @forelse($products as $product)
             @php
@@ -121,5 +131,35 @@
         @empty
             <div class="customer-empty">No products match your filters.</div>
         @endforelse
+    </div>
+
+    <div class="customer-pagination">
+        @if($products->hasPages())
+            <nav class="customer-pager" aria-label="Products pagination">
+                <a class="btn btn-outline customer-pager__btn {{ $products->onFirstPage() ? 'is-disabled' : '' }}"
+                   href="{{ $products->onFirstPage() ? '#' : $products->previousPageUrl() }}"
+                   aria-disabled="{{ $products->onFirstPage() ? 'true' : 'false' }}"
+                   tabindex="{{ $products->onFirstPage() ? '-1' : '0' }}">
+                    Prev
+                </a>
+
+                <div class="customer-pager__pages" aria-label="Page numbers">
+                    @foreach($products->getUrlRange(max(1, $products->currentPage() - 2), min($products->lastPage(), $products->currentPage() + 2)) as $page => $url)
+                        <a class="customer-pager__page {{ $page === $products->currentPage() ? 'is-active' : '' }}"
+                           href="{{ $url }}"
+                           aria-current="{{ $page === $products->currentPage() ? 'page' : 'false' }}">
+                            {{ $page }}
+                        </a>
+                    @endforeach
+                </div>
+
+                <a class="btn btn-outline customer-pager__btn {{ $products->hasMorePages() ? '' : 'is-disabled' }}"
+                   href="{{ $products->hasMorePages() ? $products->nextPageUrl() : '#' }}"
+                   aria-disabled="{{ $products->hasMorePages() ? 'false' : 'true' }}"
+                   tabindex="{{ $products->hasMorePages() ? '0' : '-1' }}">
+                    Next
+                </a>
+            </nav>
+        @endif
     </div>
 @endsection

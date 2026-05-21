@@ -261,6 +261,10 @@
                            href="{{ route('regions.index') }}">
                             Regions
                         </a>
+                        <a class="admin-submenu__link {{ request()->is('admin/settings/shipping-tax') ? 'is-active' : '' }}"
+                           href="{{ route('admin.settings.shipping_tax.edit') }}">
+                            Shipping & Tax
+                        </a>
                         <a class="admin-submenu__link {{ request()->is('operating-units') ? 'is-active' : '' }}"
                            href="{{ route('operating-units.index') }}">
                             Operating Units

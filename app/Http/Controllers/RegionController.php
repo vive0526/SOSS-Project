@@ -10,7 +10,7 @@ class RegionController extends Controller
     // List regions
     public function index()
     {
-        $regions = Region::orderBy('id')->get();
+        $regions = Region::orderBy('id')->paginate(20)->withQueryString();
         return view('regions.index', compact('regions'));
     }
 

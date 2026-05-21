@@ -1,9 +1,10 @@
 @extends('layouts.admin')
 
+@section('title', 'Regions')
+@section('page_title', 'Regions')
+@section('page_subtitle', 'Manage region master data')
+
 @section('content')
-
-<h2>Regions</h2>
-
 <div class="admin-card">
 
 <a class="btn-add" href="{{ route('regions.create') }}">Add Region</a>
@@ -12,7 +13,7 @@
     <p style="color: green;">{{ session('success') }}</p>
 @endif
 
-<table border="1" cellpadding="10" cellspacing="0">
+<table>
     <thead>
         <tr>
             <th>No</th>
@@ -25,18 +26,19 @@
     <tbody>
         @foreach($regions as $index => $region)
         <tr>
-            <td>{{ $index + 1 }}</td>
+            <td>{{ ($regions->firstItem() ?? 0) + $index }}</td>
             <td>{{ $region->name }}</td>
             <td>{{ $region->code }}</td>
             <td>{{ ucfirst($region->status) }}</td>
             <td>
-                <a href="{{ route('regions.edit', $region) }}">Edit</a>
+                <a class="btn-admin btn-edit" href="{{ route('regions.edit', $region) }}">Edit</a>
 
                 @if($region->status === 'active')
                     <form method="POST" action="{{ route('regions.deactivate', $region) }}" style="display:inline;">
                         @csrf
                         @method('PATCH')
                         <button type="submit"
+                            class="btn-admin btn-delete"
                             onclick="return confirm('Deactivate this region?')">
                             Delete
                         </button>
@@ -45,7 +47,7 @@
                     <form method="POST" action="{{ route('regions.activate', $region) }}" style="display:inline;">
                         @csrf
                         @method('PATCH')
-                        <button type="submit">
+                        <button type="submit" class="btn-admin btn-activate">
                             Activate
                         </button>
                     </form>
@@ -55,5 +57,9 @@
         @endforeach
     </tbody>
 </table>
+
+<div style="margin-top: 12px;">
+    {{ $regions->links('pagination.admin') }}
+</div>
 
 @endsection

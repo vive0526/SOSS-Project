@@ -59,7 +59,7 @@
             <tbody>
             @forelse($movements as $index => $movement)
                 <tr>
-                    <td>{{ $index + 1 }}</td>
+                    <td>{{ ($movements->firstItem() ?? 0) + $index }}</td>
                     <td>{{ $movement->product?->name ?? 'N/A' }}</td>
                     <td>{{ strtoupper($movement->type) }}</td>
                     <td>{{ $movement->quantity }}</td>
@@ -76,5 +76,9 @@
             @endforelse
             </tbody>
         </table>
+
+        <div style="margin-top:12px;">
+            {{ $movements->links('pagination.admin') }}
+        </div>
     </div>
 @endsection

@@ -5,10 +5,10 @@
 @section('page_subtitle', 'Manage your products')
 
 @section('content')
-    <div class="admin-card">
+        <div class="admin-card">
         <a href="{{ route('products.create') }}" class="btn btn-add">Add Product</a>
 
-        <form method="GET" action="{{ route('products.index') }}" style="margin-top: 15px;">
+        <form id="productFiltersForm" method="GET" action="{{ route('products.index') }}" style="margin-top: 15px;">
             <label for="search">Search</label>
             <input type="text" name="search" value="{{ request('search') }}" placeholder="Product name or description">
 
@@ -23,8 +23,6 @@
                 @endforeach
             </select>
 
-            <button type="submit" class="btn btn-primary">Filter</button>
-            <a href="{{ route('products.index') }}" class="btn">Reset</a>
         </form>
 
         <table>
@@ -49,7 +47,7 @@
                     $available = $product->availableStock();
                 @endphp
                 <tr>
-                    <td>{{ $index + 1 }}</td>
+                    <td>{{ ($products->firstItem() ?? 0) + $index }}</td>
                     <td>
                         @if($product->image)
                             <img src="{{ asset('storage/' . $product->image) }}" alt="{{ $product->name }}" style="width:60px;height:60px;object-fit:cover;">
@@ -114,10 +112,32 @@
                 @endforeach
             </tbody>
         </table>
+
+        <div style="margin-top: 12px;">
+            {{ $products->links('pagination.admin') }}
+        </div>
     </div>
 
     <script>
         (function () {
+            const form = document.getElementById('productFiltersForm');
+            if (form) {
+                const categorySelect = form.querySelector('select[name=\"category_id\"]');
+                if (categorySelect) {
+                    categorySelect.addEventListener('change', () => form.requestSubmit());
+                }
+
+                const searchInput = form.querySelector('input[name=\"search\"]');
+                if (searchInput) {
+                    searchInput.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            form.requestSubmit();
+                        }
+                    });
+                }
+            }
+
             const selects = document.querySelectorAll('[data-maintenance-select]');
             if (!selects.length) return;
 

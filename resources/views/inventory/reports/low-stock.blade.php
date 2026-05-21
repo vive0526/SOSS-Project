@@ -14,7 +14,7 @@
     </div>
 
     <div class="admin-card">
-        @if($products->isEmpty())
+        @if($products->count() === 0)
             <p>No products below reorder level.</p>
         @else
             <table>
@@ -39,7 +39,7 @@
                         $statusClass = $available <= 0 ? 'status-inactive' : 'status-low';
                     @endphp
                     <tr>
-                        <td>{{ $index + 1 }}</td>
+                        <td>{{ ($products->firstItem() ?? 0) + $index }}</td>
                         <td>{{ $product->name }}</td>
                         <td>{{ $product->category?->name ?? 'Uncategorized' }}</td>
                         <td>{{ $product->stock_quantity }}</td>
@@ -51,6 +51,10 @@
                 @endforeach
                 </tbody>
             </table>
+
+            <div style="margin-top:12px;">
+                {{ $products->links('pagination.admin') }}
+            </div>
         @endif
     </div>
 @endsection

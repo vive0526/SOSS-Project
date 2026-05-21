@@ -29,6 +29,7 @@
             <div class="sf-hero__actions">
                 <a class="btn btn-primary" href="{{ route('customer.products.index') }}">Shop best sellers</a>
                 <a class="btn btn-outline" href="{{ route('customer.products.index') }}">Browse collections</a>
+                <a class="btn btn-outline" href="{{ route('customer.addresses.index') }}">My Addresses</a>
             </div>
 
             <div class="sf-trust">

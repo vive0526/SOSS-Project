@@ -1,9 +1,10 @@
 @extends('layouts.admin')
 
+@section('title', 'Companies')
+@section('page_title', 'Companies')
+@section('page_subtitle', 'Manage company master data')
+
 @section('content')
-
-<h2>Company</h2>
-
 <div class="admin-card">
 
 <a class="btn-add" href="{{ route('companies.create') }}">Add Company</a>
@@ -12,7 +13,7 @@
     <p style="color: green;">{{ session('success') }}</p>
 @endif
 
-<table border="1" cellpadding="10" cellspacing="0">
+<table>
     <thead>
         <tr>
             <th>No</th>
@@ -26,24 +27,24 @@
     <tbody>
         @foreach($companies as $index => $company)
         <tr>
-            <td>{{ $index + 1 }}</td>
+            <td>{{ ($companies->firstItem() ?? 0) + $index }}</td>
             <td>{{ $company->name }}</td>
             <td>{{ $company->code }}</td>
             <td>{{ ucfirst($company->status) }}</td>
             <td>
-                <a href="{{ route('companies.edit', $company) }}">Edit</a>
+                <a class="btn-admin btn-edit" href="{{ route('companies.edit', $company) }}">Edit</a>
 
                 @if($company->status === 'active')
                     <form method="POST" action="{{ route('companies.deactivate', $company) }}" style="display:inline;">
                         @csrf
                         @method('PATCH')
-                        <button type="submit" onclick="return confirm('Deactivate this company?')">Delete</button>
+                        <button type="submit" class="btn-admin btn-delete" onclick="return confirm('Deactivate this company?')">Delete</button>
                     </form>
                 @else
                     <form method="POST" action="{{ route('companies.activate', $company) }}" style="display:inline;">
                         @csrf
                         @method('PATCH')
-                        <button type="submit">Activate</button>
+                        <button type="submit" class="btn-admin btn-activate">Activate</button>
                     </form>
                 @endif
             </td>
@@ -51,5 +52,9 @@
         @endforeach
     </tbody>
 </table>
+
+<div style="margin-top: 12px;">
+    {{ $companies->links('pagination.admin') }}
+</div>
 
 @endsection

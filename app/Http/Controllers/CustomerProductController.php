@@ -49,7 +49,7 @@ class CustomerProductController extends Controller
                 break;
         }
 
-        $products = $query->get();
+        $products = $query->paginate(15)->withQueryString();
         $categories = Category::orderBy('name')->get();
 
         return view('customer.products.index', compact('products', 'categories'));

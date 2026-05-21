@@ -27,7 +27,7 @@ class ProductController extends Controller
             $query->where('category_id', $request->input('category_id'));
         }
 
-        $products = $query->get();
+        $products = $query->paginate(20)->withQueryString();
         $categories = Category::orderBy('name')->get();
 
         return view('products.index', compact('products', 'categories'));
@@ -41,20 +41,31 @@ class ProductController extends Controller
             $threshold = 0;
         }
 
-        $products = Product::with('category')->orderBy('name')->get();
-        $lowStockProducts = Product::with('category')
+        $totalProducts = Product::count();
+
+        $lowStockProductsQuery = Product::with('category')
             ->whereRaw('(stock_quantity - COALESCE(reserved_quantity, 0)) > 0')
             ->whereRaw('(stock_quantity - COALESCE(reserved_quantity, 0)) <= ?', [$threshold])
-            ->orderByRaw('(stock_quantity - COALESCE(reserved_quantity, 0)) asc')
-            ->get();
-        $outOfStockProducts = Product::with('category')
-            ->whereRaw('(stock_quantity - COALESCE(reserved_quantity, 0)) <= 0')
-            ->orderBy('name')
-            ->get();
+            ->orderByRaw('(stock_quantity - COALESCE(reserved_quantity, 0)) asc');
+        $lowStockCount = (clone $lowStockProductsQuery)->count();
 
-        $totalProducts = $products->count();
-        $lowStockCount = $lowStockProducts->count();
-        $outOfStockCount = $outOfStockProducts->count();
+        $outOfStockProductsQuery = Product::with('category')
+            ->whereRaw('(stock_quantity - COALESCE(reserved_quantity, 0)) <= 0')
+            ->orderBy('name');
+        $outOfStockCount = (clone $outOfStockProductsQuery)->count();
+
+        $products = Product::with('category')
+            ->orderBy('name')
+            ->paginate(20, ['*'], 'products_page')
+            ->withQueryString();
+
+        $lowStockProducts = $lowStockProductsQuery
+            ->paginate(20, ['*'], 'low_stock_page')
+            ->withQueryString();
+
+        $outOfStockProducts = $outOfStockProductsQuery
+            ->paginate(20, ['*'], 'out_of_stock_page')
+            ->withQueryString();
 
         return view('products.inventory', compact(
             'products',

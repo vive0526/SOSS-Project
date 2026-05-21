@@ -1,9 +1,10 @@
 @extends('layouts.admin')
 
+@section('title', 'User Management')
+@section('page_title', 'User Management')
+@section('page_subtitle', 'Manage admin, staff, and customer accounts')
+
 @section('content')
-
-<h2>User Management</h2>
-
 <div class="admin-card">
 
 @if(session('success'))
@@ -18,7 +19,7 @@
     $activateRoute = $isStaff ? 'staff.users.activate' : 'users.activate';
 @endphp
 
-<table border="1" cellpadding="10" cellspacing="0">
+<table>
     <thead>
         <tr>
             <th>No</th>
@@ -34,7 +35,7 @@
     <tbody>
         @foreach($users as $index => $user)
         <tr>
-            <td>{{ $index + 1 }}</td>
+            <td>{{ ($users->firstItem() ?? 0) + $index }}</td>
             <td>{{ $user->name }}</td>
             <td>{{ $user->email }}</td>
             <td>{{ ucfirst($user->role) }}</td>
@@ -43,8 +44,7 @@
             @if($isAdmin || $isStaff)
             <td>
                 @if($isAdmin || $user->role === 'customer')
-                <div class="admin-card">
-                <a href="{{ route($editRoute, $user) }}">Edit</a>
+                <a class="btn-admin btn-edit" href="{{ route($editRoute, $user) }}">Edit</a>
 
                 @if($user->status === 'active')
                     <form action="{{ route($deactivateRoute, $user) }}"
@@ -52,6 +52,7 @@
                         @csrf
                         @method('PATCH')
                         <button type="submit"
+                            class="btn-admin btn-delete"
                             onclick="return confirm('Deactivate this user?')">
                             Deactivate
                         </button>
@@ -62,12 +63,12 @@
                         @csrf
                         @method('PATCH')
                         <button type="submit"
+                            class="btn-admin btn-activate"
                             onclick="return confirm('Activate this user?')">
                             Activate
                         </button>
                     </form>
                 @endif
-                </div>
                 @else
                     <span>-</span>
                 @endif
@@ -77,5 +78,9 @@
         @endforeach
     </tbody>
 </table>
+
+<div style="margin-top: 12px;">
+    {{ $users->links('pagination.admin') }}
+</div>
 
 @endsection
