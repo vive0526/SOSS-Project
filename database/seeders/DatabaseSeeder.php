@@ -21,13 +21,14 @@ class DatabaseSeeder extends Seeder
 
         $prefixedIds = app(PrefixedIdService::class);
 
-        $admin = User::firstOrNew(['email' => 'vivethan@soss.com']);
+        $admin = User::where('role', 'admin')->first() ?? new User();
         if (! $admin->exists) {
             $admin->user_id = $prefixedIds->next(User::PREFIXED_PRIMARY_KEY_COUNTER);
         }
         $admin->fill([
-            'name' => 'Vivi Admin',
-            'password' => Hash::make('vivi1234'),
+            'name' => 'Admin',
+            'email' => 'admin@soss.com',
+            'password' => Hash::make('admin'),
             'role' => 'admin',
             'status' => 'active',
         ]);

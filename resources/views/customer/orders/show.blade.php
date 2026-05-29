@@ -73,6 +73,9 @@
             </p>
             <p><strong>Postcode:</strong> {{ $order->shipping_postcode ?? '-' }}</p>
             <p><strong>Country:</strong> {{ $order->shipping_country ?? '-' }}</p>
+            @if(filled($order->delivery_notes))
+                <p><strong>Delivery Notes:</strong> {{ $order->delivery_notes }}</p>
+            @endif
         </div>
         <div>
             <h3 style="margin-bottom: 8px;">Order Summary</h3>

@@ -34,10 +34,6 @@
                 </select>
             </div>
 
-            <div style="align-self:flex-end;">
-                <button type="submit" class="btn btn-primary">Filter</button>
-                <a class="btn btn-outline" href="{{ route('inventory.history') }}">Reset</a>
-            </div>
         </form>
     </div>
 
@@ -81,4 +77,28 @@
             {{ $movements->links('pagination.admin') }}
         </div>
     </div>
+
+    <script>
+        (function () {
+            const form = document.querySelector('form[action="{{ route('inventory.history') }}"]');
+            if (!form) return;
+
+            const fields = form.querySelectorAll('select[name="product_id"], select[name="type"]');
+            if (!fields.length) return;
+
+            let t = null;
+            const submitSoon = () => {
+                if (t) window.clearTimeout(t);
+                t = window.setTimeout(() => {
+                    if (typeof form.requestSubmit === 'function') {
+                        form.requestSubmit();
+                    } else {
+                        form.submit();
+                    }
+                }, 150);
+            };
+
+            fields.forEach((el) => el.addEventListener('change', submitSoon));
+        })();
+    </script>
 @endsection

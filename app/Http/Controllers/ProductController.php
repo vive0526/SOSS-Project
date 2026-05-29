@@ -3,17 +3,20 @@
 namespace App\Http\Controllers;
 
 use App\Models\Product;
+use App\Models\ProductImage;
 use App\Models\Category;
+use App\Models\OrderItem;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 
 class ProductController extends Controller
 {
     // Display all products (Admin & Staff can see the full catalog)
     public function index(Request $request)
     {
-        $query = Product::with('category')->orderByDesc('created_at');
+        $query = Product::with(['category', 'images'])->orderByDesc('created_at');
 
         if ($request->filled('search')) {
             $search = $request->input('search');
@@ -101,12 +104,15 @@ class ProductController extends Controller
 
         $product->save();
 
+        $this->storeGalleryUploads($request, $product);
+
         return redirect()->route('products.index')->with('success', 'Product added successfully.');
     }
 
     // Show the form for editing a product
     public function edit(Product $product)
     {
+        $product->load('images');
         $categories = Category::orderBy('name')->get();  // Get categories for the dropdown
         return view('products.edit', compact('product', 'categories'));
     }
@@ -114,7 +120,7 @@ class ProductController extends Controller
     // Update the product
     public function update(Request $request, Product $product)
     {
-        $data = $this->validatedProductData($request);
+        $data = $this->validatedProductData($request, $product);
         $product->update($data);
 
         // Handle image update
@@ -126,23 +132,68 @@ class ProductController extends Controller
 
             $product->image = $request->file('image')->store('products', 'public');
             $product->save();
+
+            ProductImage::query()
+                ->where('product_id', $product->getKey())
+                ->update(['is_primary' => false]);
+
+            $product->images()->create([
+                'path' => $product->image,
+                'sort_order' => 0,
+                'is_primary' => true,
+            ]);
         }
+
+        $this->storeGalleryUploads($request, $product);
 
         return redirect()->route('products.index')->with('success', 'Product updated successfully.');
     }
 
-    private function validatedProductData(Request $request): array
+    public function destroyImage(Product $product, ProductImage $image)
+    {
+        if ((string) $image->product_id !== (string) $product->getKey()) {
+            abort(404);
+        }
+
+        if ($image->path && file_exists(storage_path('app/public/' . $image->path))) {
+            unlink(storage_path('app/public/' . $image->path));
+        }
+
+        $wasPrimary = (bool) ($image->is_primary ?? false);
+        $image->delete();
+
+        if ($wasPrimary) {
+            $next = ProductImage::query()
+                ->where('product_id', $product->getKey())
+                ->orderBy('sort_order')
+                ->orderBy('id')
+                ->first();
+
+            if ($next) {
+                $next->update(['is_primary' => true]);
+            }
+        }
+
+        return back()->with('success', 'Image removed.');
+    }
+
+    private function validatedProductData(Request $request, ?Product $product = null): array
     {
         $treePlantingCategoryId = 5;
         $forceMaintenance = (int) $request->input('category_id') === $treePlantingCategoryId;
 
         $rules = [
             'name' => 'required|string',
+            'slug' => 'nullable|string|max:255',
             'description' => 'required|string',
             'price' => 'nullable|numeric|min:0',
             'stock_quantity' => 'nullable|integer|min:0',
             'category_id' => 'nullable|exists:categories,id',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
+            'gallery_images' => 'nullable|array',
+            'gallery_images.*' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
+            'is_active' => 'nullable|boolean',
+            'is_featured' => 'nullable|boolean',
             'maintenance_years' => 'nullable|integer|min:1|max:5',
             'maintenance_prices' => 'nullable|array',
             'maintenance_prices.*' => 'nullable|numeric|min:0',
@@ -156,7 +207,23 @@ class ProductController extends Controller
 
         $validator = Validator::make($request->all(), $rules);
 
-        $validator->after(function ($validator) use ($request, $forceMaintenance) {
+        $validator->after(function ($validator) use ($request, $forceMaintenance, $product) {
+            $slug = (string) $request->input('slug', '');
+            if ($slug !== '') {
+                $normalized = Str::slug($slug);
+                if ($normalized === '') {
+                    $validator->errors()->add('slug', 'Slug is invalid.');
+                } else {
+                    $exists = Product::query()
+                        ->where('slug', $normalized)
+                        ->when($product, fn ($q) => $q->where('product_id', '!=', (string) $product->getKey()))
+                        ->exists();
+                    if ($exists) {
+                        $validator->errors()->add('slug', 'Slug is already in use.');
+                    }
+                }
+            }
+
             if (!$forceMaintenance) {
                 $price = $request->input('price');
                 if ($price === null || $price === '') {
@@ -190,7 +257,11 @@ class ProductController extends Controller
         });
 
         $data = $validator->validate();
-        unset($data['image']);
+        unset($data['image'], $data['gallery_images']);
+
+        $data['slug'] = !empty($data['slug']) ? Str::slug((string) $data['slug']) : null;
+        $data['is_active'] = $request->boolean('is_active', true);
+        $data['is_featured'] = $request->boolean('is_featured', false);
 
         $data['requires_maintenance'] = $forceMaintenance;
 
@@ -228,12 +299,68 @@ class ProductController extends Controller
         return $data;
     }
 
+    private function storeGalleryUploads(Request $request, Product $product): void
+    {
+        if (!$request->hasFile('gallery_images')) {
+            return;
+        }
+
+        $files = $request->file('gallery_images', []);
+        if (!is_array($files) || empty($files)) {
+            return;
+        }
+
+        $maxSort = (int) ProductImage::query()
+            ->where('product_id', $product->getKey())
+            ->max('sort_order');
+
+        $hasPrimary = ProductImage::query()
+            ->where('product_id', $product->getKey())
+            ->where('is_primary', true)
+            ->exists();
+
+        foreach ($files as $file) {
+            if (!$file) {
+                continue;
+            }
+
+            $path = $file->store('products', 'public');
+            $maxSort++;
+
+            $product->images()->create([
+                'path' => $path,
+                'sort_order' => $maxSort,
+                'is_primary' => !$hasPrimary,
+            ]);
+
+            $hasPrimary = true;
+        }
+    }
+
     // Delete the product
     public function destroy(Product $product)
     {
-        // Delete the product image
-        if ($product->image && file_exists(storage_path('app/public/' . $product->image))) {
-            unlink(storage_path('app/public/' . $product->image));
+        $hasOrders = OrderItem::query()
+            ->where('product_id', $product->getKey())
+            ->exists();
+
+        if ($hasOrders) {
+            $product->forceFill([
+                'is_active' => false,
+                'is_featured' => false,
+            ])->save();
+
+            return redirect()
+                ->route('products.index')
+                ->with('success', 'Product has order history, so it was deactivated instead of deleted.');
+        }
+
+        $product->loadMissing('images');
+        foreach ($product->imagePaths() as $path) {
+            $fullPath = storage_path('app/public/' . $path);
+            if (file_exists($fullPath)) {
+                unlink($fullPath);
+            }
         }
 
         $product->delete();

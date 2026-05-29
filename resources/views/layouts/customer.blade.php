@@ -6,9 +6,9 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Customer Dashboard')</title>
 
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @vite(['resources/css/app.css', 'resources/css/customer.css', 'resources/js/app.js'])
 </head>
-<body class="customer-body">
+<body class="customer-body @yield('body_class')">
     <div class="customer-shell">
         <aside class="customer-sidebar">
             <div class="customer-brand">
@@ -107,6 +107,8 @@
             </main>
         </div>
     </div>
+
+    @include('partials.background_sound')
 
     <script>
         (function () {

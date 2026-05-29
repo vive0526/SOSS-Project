@@ -172,6 +172,7 @@ class CustomerCheckoutController extends Controller
             'address_id' => 'nullable|string',
             'payment_method' => 'required|in:' . implode(',', array_keys($paymentMethods)),
             'coupon_code' => 'nullable|string|max:32',
+            'delivery_notes' => 'nullable|string|max:2000',
         ]);
 
         /** @var \App\Models\CustomerAddress|null $address */
@@ -217,6 +218,7 @@ class CustomerCheckoutController extends Controller
                 $productIds = collect($cart)->pluck('product_id')->filter()->unique()->values()->all();
                 $products = Product::query()
                     ->whereIn('product_id', $productIds)
+                    ->where('is_active', true)
                     ->orderBy('product_id')
                     ->lockForUpdate()
                     ->get()
@@ -346,6 +348,7 @@ class CustomerCheckoutController extends Controller
                     'shipping_state' => $address->state_key,
                     'shipping_postcode' => $address->postcode,
                     'shipping_country' => $address->country,
+                    'delivery_notes' => isset($data['delivery_notes']) ? trim((string) $data['delivery_notes']) : null,
                     'reserved_at' => $reservedAt,
                     'reservation_expires_at' => $reservationExpiresAt,
                 ]);
@@ -411,8 +414,12 @@ class CustomerCheckoutController extends Controller
             });
         } catch (\Throwable $e) {
             if ($e instanceof InsufficientStockException) {
+                $slug = \App\Models\Product::query()
+                    ->where('product_id', $e->productId)
+                    ->value('slug');
+
                 return redirect()
-                    ->route('customer.products.show', $e->productId)
+                    ->route($slug ? 'customer.products.show' : 'customer.products.show.legacy', $slug ?: $e->productId)
                     ->with('warning', $e->getMessage());
             }
 
@@ -501,7 +508,7 @@ class CustomerCheckoutController extends Controller
                 'price' => $unitPrice,
                 'quantity' => $quantity,
                 'maintenance_year' => $maintenanceYear,
-                'image' => $product->image,
+                'image' => $product->primaryImagePath(),
             ]);
 
             $pricedCart[$resolvedKey] = $item;
@@ -547,7 +554,10 @@ class CustomerCheckoutController extends Controller
     private function priceCartFromDatabase(array $cart): array
     {
         $productIds = collect($cart)->pluck('product_id')->filter()->unique()->values()->all();
-        $products = Product::whereIn('product_id', $productIds)->get()->keyBy('product_id');
+        $products = Product::whereIn('product_id', $productIds)
+            ->where('is_active', true)
+            ->get()
+            ->keyBy('product_id');
 
         $pricedCart = [];
         $sanitizedCart = [];
@@ -608,7 +618,7 @@ class CustomerCheckoutController extends Controller
                 'price' => $unitPrice,
                 'quantity' => $quantity,
                 'maintenance_year' => $maintenanceYear,
-                'image' => $product->image,
+                'image' => $product->primaryImagePath(),
             ]);
 
             $pricedCart[$resolvedKey] = $item;

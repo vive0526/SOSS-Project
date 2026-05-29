@@ -3,6 +3,7 @@
 @section('title', 'Checkout')
 @section('page_title', 'Checkout')
 @section('page_subtitle', 'Confirm your shipping details')
+@section('body_class', 'customer-checkout')
 
 @section('content')
     @if(session('success'))
@@ -22,166 +23,229 @@
         </div>
     @endif
 
-    <div class="customer-card">
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
-            <div>
-                <h3 style="margin:0;">Delivery Address</h3>
-                <div style="margin-top:6px; color:#7b6a5b; font-size:12px;">
-                    Choose where you want your order delivered.
-                </div>
-            </div>
-            <a class="btn btn-outline" href="{{ route('customer.addresses.index') }}">Manage Addresses</a>
-        </div>
-
-        <form method="GET" action="{{ route('customer.checkout.index') }}" style="margin-top:12px;">
-            <div class="customer-form__row">
-                <div class="customer-field" style="flex:1 1 420px;">
-                    <label for="address_id">Select Address</label>
-                    <select id="address_id" name="address_id" onchange="this.form.submit()">
-                        @foreach(($addresses ?? []) as $addr)
-                            <option value="{{ $addr->id }}" {{ (string) ($selectedAddress->id ?? '') === (string) $addr->id ? 'selected' : '' }}>
-                                {{ $addr->label ?: 'Address' }} — {{ $addr->recipient_name }}, {{ \App\Support\MalaysiaStates::label($addr->state_key) }}
-                            </option>
-                        @endforeach
-                    </select>
-                </div>
-            </div>
-        </form>
-
-        @if(isset($selectedAddress))
-            <div style="margin-top:10px; line-height:1.6;">
-                <div><strong>{{ $selectedAddress->recipient_name }}</strong> — {{ $selectedAddress->phone }}</div>
-                <div>{{ $selectedAddress->address_line }}</div>
+    <div class="co-checkout">
+        <div class="customer-card">
+            <div class="co-card-head">
                 <div>
-                    {{ $selectedAddress->postcode }} {{ $selectedAddress->city }},
-                    {{ \App\Support\MalaysiaStates::label($selectedAddress->state_key) }},
-                    {{ $selectedAddress->country }}
+                    <h3 class="co-card-title">Delivery Address</h3>
+                    <div class="co-card-subtitle">Choose where you want your order delivered.</div>
                 </div>
-            </div>
-        @endif
-    </div>
-
-    <form method="POST" action="{{ route('customer.checkout.place') }}" class="customer-form">
-        @csrf
-        <input type="hidden" name="address_id" value="{{ $selectedAddress->id ?? '' }}">
-
-        <div class="customer-card">
-            <div class="customer-field">
-                <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-                    <label for="payment_method" style="margin:0;">Payment Method</label>
-                    @if(isset($stripeConfigured) && !$stripeConfigured)
-                        <span class="customer-badge">Card/FPX (Stripe) temporarily unavailable</span>
-                    @endif
-                </div>
-                <select name="payment_method"
-                        id="payment_method"
-                        class="{{ $errors->has('payment_method') ? 'is-invalid' : '' }}"
-                        aria-invalid="{{ $errors->has('payment_method') ? 'true' : 'false' }}"
-                        required>
-                    @foreach($paymentMethods as $value => $label)
-                        <option value="{{ $value }}" {{ old('payment_method') === $value ? 'selected' : '' }}>
-                            {{ $label }}
-                        </option>
-                    @endforeach
-                </select>
-                @error('payment_method')
-                    <div class="customer-field__error" id="payment_method_error">{{ $message }}</div>
-                @enderror
-
-                @if(!isset($stripeConfigured) || $stripeConfigured)
-                    <div class="customer-alert" id="stripeReservationNotice" style="margin-top:12px; display:none;">
-                        <div>
-                            For Card/FPX (Stripe) payments, your items are reserved for 5 minutes after you confirm checkout.
-                            Please complete payment within that time to avoid the order being cancelled.
-                        </div>
-                    </div>
-                @endif
-            </div>
-        </div>
-
-        <div class="customer-card">
-            <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
-                <h3 style="margin:0;">Discount</h3>
-                <a class="btn btn-outline" href="{{ route('customer.discounts.index') }}">View Coupons</a>
+                <a class="btn btn-outline" href="{{ route('customer.addresses.index') }}">Manage</a>
             </div>
 
-            <div class="customer-form__row" style="margin-top:12px;">
-                <div class="customer-field" style="flex:1 1 320px;">
-                    <label for="coupon_code">Coupon Code (optional)</label>
-                    <select name="coupon_code"
-                            id="coupon_code"
-                            class="{{ $errors->has('coupon_code') ? 'is-invalid' : '' }}"
-                            aria-invalid="{{ $errors->has('coupon_code') ? 'true' : 'false' }}">
-                        <option value="">No coupon</option>
-                        @foreach($claimedCoupons as $coupon)
-                            <option value="{{ $coupon->code }}"
-                                {{ old('coupon_code', $selectedCouponCode) === $coupon->code ? 'selected' : '' }}>
-                                {{ $coupon->code }} - {{ $coupon->name }}
-                            </option>
-                        @endforeach
-                    </select>
-                    @error('coupon_code')
-                        <div class="customer-field__error" id="coupon_code_error">{{ $message }}</div>
-                    @enderror
-                    <div style="margin-top:8px; color:#7b6a5b; font-size:12px;">
-                        Tip: Claim a coupon first, then select it here.
+            <form method="GET" action="{{ route('customer.checkout.index') }}" class="co-address-form">
+                <div class="customer-form__row">
+                    <div class="customer-field" style="flex:1 1 420px;">
+                        <label for="address_id">Select Address</label>
+                        <select id="address_id" name="address_id" onchange="this.form.submit()">
+                            @foreach(($addresses ?? []) as $addr)
+                                <option value="{{ $addr->id }}" {{ (string) ($selectedAddress->id ?? '') === (string) $addr->id ? 'selected' : '' }}>
+                                    {{ $addr->label ?: 'Address' }} — {{ $addr->recipient_name }}, {{ \App\Support\MalaysiaStates::label($addr->state_key) }}
+                                </option>
+                            @endforeach
+                        </select>
                     </div>
                 </div>
-            </div>
-        </div>
+            </form>
 
-        <div class="customer-card">
-            <h3 style="margin-bottom: 12px;">Order Summary</h3>
-            <table class="customer-table">
-                <thead>
-                    <tr>
-                        <th>Product</th>
-                        <th>Year</th>
-                        <th>Qty</th>
-                        <th>Price</th>
-                        <th>Subtotal</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach($cart as $item)
-                        <tr>
-                            <td>{{ $item['name'] }}</td>
-                            <td>{{ $item['maintenance_year'] ?? '-' }}</td>
-                            <td>{{ $item['quantity'] }}</td>
-                            <td>RM {{ number_format((float) $item['price'], 2) }}</td>
-                            <td>RM {{ number_format((float) $item['price'] * (int) $item['quantity'], 2) }}</td>
-                        </tr>
-                    @endforeach
-                </tbody>
-            </table>
-            <div style="display:flex; justify-content:flex-end; margin-top:12px; gap:18px; flex-wrap:wrap;">
-                <div><strong>Subtotal:</strong> RM {{ number_format((float) $subtotal, 2) }}</div>
-                <div><strong>Shipping Fee:</strong> RM {{ number_format((float) $shippingFee, 2) }}</div>
-                <div><strong>Discount:</strong> RM {{ number_format((float) ($discount ?? 0), 2) }}</div>
-                <div>
-                    <strong>Tax ({{ number_format(((float) ($taxRate ?? 0)) * 100, 2) }}%):</strong>
-                    RM {{ number_format((float) ($tax ?? 0), 2) }}
-                </div>
-                <div><strong>Total:</strong> RM {{ number_format((float) $total, 2) }}</div>
-            </div>
-
-            @if(!empty($shippingPolicyText) || !empty($taxPolicyText))
-                <div style="margin-top:14px; color:#7b6a5b; font-size:12px; line-height:1.55;">
-                    @if(!empty($shippingPolicyText))
-                        <div><strong>Shipping policy:</strong> {{ $shippingPolicyText }}</div>
-                    @endif
-                    @if(!empty($taxPolicyText))
-                        <div style="margin-top:6px;"><strong>Tax policy:</strong> {{ $taxPolicyText }}</div>
-                    @endif
+            @if(isset($selectedAddress))
+                <div class="co-address-preview">
+                    <div><strong>{{ $selectedAddress->recipient_name }}</strong> — {{ $selectedAddress->phone }}</div>
+                    <div>{{ $selectedAddress->address_line }}</div>
+                    <div>
+                        {{ $selectedAddress->postcode }} {{ $selectedAddress->city }},
+                        {{ \App\Support\MalaysiaStates::label($selectedAddress->state_key) }},
+                        {{ $selectedAddress->country }}
+                    </div>
                 </div>
             @endif
         </div>
 
-        <div class="customer-card" style="display:flex; justify-content:flex-end; gap:12px;">
-            <a class="btn btn-outline" href="{{ route('customer.cart.index') }}">Back to Cart</a>
-            <button type="submit" class="btn btn-primary">Confirm Checkout</button>
-        </div>
-    </form>
+        <form method="POST" action="{{ route('customer.checkout.place') }}" class="customer-form">
+            @csrf
+            <input type="hidden" name="address_id" value="{{ $selectedAddress->id ?? '' }}">
+
+            <div class="co-grid">
+                <div class="co-left">
+                    <div class="customer-card">
+                        <div class="customer-field">
+                            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                                <label for="payment_method" style="margin:0;">Payment Method</label>
+                                @if(isset($stripeConfigured) && !$stripeConfigured)
+                                    <span class="customer-badge">Card/FPX (Stripe) temporarily unavailable</span>
+                                @endif
+                            </div>
+
+                            <select name="payment_method"
+                                    id="payment_method"
+                                    class="{{ $errors->has('payment_method') ? 'is-invalid' : '' }}"
+                                    aria-invalid="{{ $errors->has('payment_method') ? 'true' : 'false' }}"
+                                    required>
+                                @foreach($paymentMethods as $value => $label)
+                                    <option value="{{ $value }}" {{ old('payment_method') === $value ? 'selected' : '' }}>
+                                        {{ $label }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            @error('payment_method')
+                                <div class="customer-field__error" id="payment_method_error">{{ $message }}</div>
+                            @enderror
+
+                            @if(!isset($stripeConfigured) || $stripeConfigured)
+                                <div class="customer-alert" id="stripeReservationNotice" style="margin-top:12px; display:none;">
+                                    <div>
+                                        For Card/FPX (Stripe) payments, your items are reserved for 5 minutes after you confirm checkout.
+                                        Please complete payment within that time to avoid the order being cancelled.
+                                    </div>
+                                </div>
+                            @endif
+                        </div>
+                    </div>
+
+                    <div class="customer-card co-optional" data-co-optional>
+                        <button class="co-optional__toggle" type="button" data-co-optional-toggle aria-expanded="false">
+                            <span>Optional: Notes &amp; Discount</span>
+                            <span class="co-optional__meta">Add delivery notes or apply coupons</span>
+                            <span class="co-optional__chev" aria-hidden="true">v</span>
+                        </button>
+
+                        <div class="co-optional__body" data-co-optional-body hidden>
+                            <div class="customer-field {{ $errors->has('delivery_notes') ? 'is-invalid' : '' }}">
+                                <label for="delivery_notes">Delivery Notes <span style="color:#9b7f63; font-size:12px;">(optional)</span></label>
+                                <textarea id="delivery_notes"
+                                          name="delivery_notes"
+                                          rows="3"
+                                          placeholder="Example: Leave with guard, call when arriving, gate code, preferred delivery time…">{{ old('delivery_notes') }}</textarea>
+                                @error('delivery_notes')
+                                    <div class="customer-field__error" id="delivery_notes_error">{{ $message }}</div>
+                                @enderror
+                            </div>
+
+                            <div class="co-divider"></div>
+
+                            <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+                                <h3 style="margin:0;">Discount</h3>
+                                <a class="btn btn-outline" href="{{ route('customer.discounts.index') }}">View Coupons</a>
+                            </div>
+
+                            <div class="customer-form__row" style="margin-top:12px;">
+                                <div class="customer-field" style="flex:1 1 320px;">
+                                    <label for="coupon_code">Coupon Code (optional)</label>
+                                    <select name="coupon_code"
+                                            id="coupon_code"
+                                            class="{{ $errors->has('coupon_code') ? 'is-invalid' : '' }}"
+                                            aria-invalid="{{ $errors->has('coupon_code') ? 'true' : 'false' }}">
+                                        <option value="">No coupon</option>
+                                        @foreach($claimedCoupons as $coupon)
+                                            <option value="{{ $coupon->code }}"
+                                                {{ old('coupon_code', $selectedCouponCode) === $coupon->code ? 'selected' : '' }}>
+                                                {{ $coupon->code }} - {{ $coupon->name }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                    @error('coupon_code')
+                                        <div class="customer-field__error" id="coupon_code_error">{{ $message }}</div>
+                                    @enderror
+                                    <div style="margin-top:8px; color:#7b6a5b; font-size:12px;">
+                                        Tip: Claim a coupon first, then select it here.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <aside class="co-right" aria-label="Order summary">
+                    <div class="customer-card co-summary">
+                        <div class="co-summary__head">
+                            <h3 style="margin:0;">Order Summary</h3>
+                            <button type="button" class="btn btn-outline co-items-toggle" data-co-items-toggle aria-expanded="false">
+                                Items ({{ is_countable($cart) ? count($cart) : 0 }})
+                            </button>
+                        </div>
+
+                        <div class="co-items" data-co-items hidden>
+                            <table class="customer-table">
+                                <thead>
+                                    <tr>
+                                        <th>Product</th>
+                                        <th>Year</th>
+                                        <th>Qty</th>
+                                        <th>Price</th>
+                                        <th>Subtotal</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($cart as $item)
+                                        <tr>
+                                            <td>{{ $item['name'] }}</td>
+                                            <td>{{ $item['maintenance_year'] ?? '-' }}</td>
+                                            <td>{{ $item['quantity'] }}</td>
+                                            <td>RM {{ number_format((float) $item['price'], 2) }}</td>
+                                            <td>RM {{ number_format((float) $item['price'] * (int) $item['quantity'], 2) }}</td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="co-totals">
+                            <div class="co-total-row"><span>Subtotal</span><strong>RM {{ number_format((float) $subtotal, 2) }}</strong></div>
+                            <div class="co-total-row"><span>Shipping</span><strong>RM {{ number_format((float) $shippingFee, 2) }}</strong></div>
+                            <div class="co-total-row"><span>Discount</span><strong>RM {{ number_format((float) ($discount ?? 0), 2) }}</strong></div>
+                            <div class="co-total-row">
+                                <span>Tax ({{ number_format(((float) ($taxRate ?? 0)) * 100, 2) }}%)</span>
+                                <strong>RM {{ number_format((float) ($tax ?? 0), 2) }}</strong>
+                            </div>
+                            <div class="co-total-row co-total-row--grand"><span>Total</span><strong>RM {{ number_format((float) $total, 2) }}</strong></div>
+                        </div>
+
+                        @if(!empty($shippingPolicyText) || !empty($taxPolicyText))
+                            <div class="co-policies">
+                                @if(!empty($shippingPolicyText))
+                                    <button type="button" class="co-policy-link" data-co-modal-open="shipping">Shipping policy</button>
+                                @endif
+                                @if(!empty($taxPolicyText))
+                                    <button type="button" class="co-policy-link" data-co-modal-open="tax">Tax policy</button>
+                                @endif
+                            </div>
+                        @endif
+
+                        <div class="co-actions">
+                            <a class="btn btn-outline" href="{{ route('customer.cart.index') }}">Back</a>
+                            <button type="submit" class="btn btn-primary">Confirm Checkout</button>
+                        </div>
+                    </div>
+                </aside>
+            </div>
+        </form>
+
+        @if(!empty($shippingPolicyText))
+            <div class="sf-modal" data-co-modal="shipping" aria-hidden="true">
+                <button type="button" class="sf-modal__backdrop" data-co-modal-close aria-label="Close"></button>
+                <div class="sf-modal__panel" role="dialog" aria-modal="true" aria-label="Shipping policy">
+                    <div class="sf-modal__title">Shipping policy</div>
+                    <div class="sf-modal__text">{{ $shippingPolicyText }}</div>
+                    <div class="sf-modal__actions">
+                        <button type="button" class="btn btn-primary" data-co-modal-close>Close</button>
+                    </div>
+                </div>
+            </div>
+        @endif
+
+        @if(!empty($taxPolicyText))
+            <div class="sf-modal" data-co-modal="tax" aria-hidden="true">
+                <button type="button" class="sf-modal__backdrop" data-co-modal-close aria-label="Close"></button>
+                <div class="sf-modal__panel" role="dialog" aria-modal="true" aria-label="Tax policy">
+                    <div class="sf-modal__title">Tax policy</div>
+                    <div class="sf-modal__text">{{ $taxPolicyText }}</div>
+                    <div class="sf-modal__actions">
+                        <button type="button" class="btn btn-primary" data-co-modal-close>Close</button>
+                    </div>
+                </div>
+            </div>
+        @endif
+    </div>
 
     <script>
         (function () {
@@ -214,5 +278,50 @@
                 window.location.href = url.toString();
             });
         })();
+
+        (function () {
+            const toggle = document.querySelector('[data-co-optional-toggle]');
+            const body = document.querySelector('[data-co-optional-body]');
+            if (toggle && body) {
+                toggle.addEventListener('click', () => {
+                    const open = !body.hasAttribute('hidden');
+                    if (open) body.setAttribute('hidden', '');
+                    else body.removeAttribute('hidden');
+                    toggle.setAttribute('aria-expanded', open ? 'false' : 'true');
+                });
+            }
+
+            const itemsToggle = document.querySelector('[data-co-items-toggle]');
+            const items = document.querySelector('[data-co-items]');
+            if (itemsToggle && items) {
+                itemsToggle.addEventListener('click', () => {
+                    const open = !items.hasAttribute('hidden');
+                    if (open) items.setAttribute('hidden', '');
+                    else items.removeAttribute('hidden');
+                    itemsToggle.setAttribute('aria-expanded', open ? 'false' : 'true');
+                });
+            }
+
+            const openers = document.querySelectorAll('[data-co-modal-open]');
+            const closeAll = () => {
+                document.querySelectorAll('[data-co-modal]').forEach((m) => m.classList.remove('is-open'));
+            };
+            openers.forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    const key = btn.getAttribute('data-co-modal-open');
+                    if (!key) return;
+                    const modal = document.querySelector(`[data-co-modal="${key}"]`);
+                    if (!modal) return;
+                    modal.classList.add('is-open');
+                });
+            });
+            document.querySelectorAll('[data-co-modal-close]').forEach((btn) => {
+                btn.addEventListener('click', closeAll);
+            });
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') closeAll();
+            });
+        })();
     </script>
 @endsection
+

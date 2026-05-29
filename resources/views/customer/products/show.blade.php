@@ -49,10 +49,31 @@
 
     <div class="customer-product-detail">
         <div class="customer-product-detail__media">
-            @if($product->image)
-                <img src="{{ asset('storage/' . $product->image) }}" alt="{{ $product->name }}">
+            @php
+                $imagePaths = $product->imagePaths();
+                $primaryPath = $product->primaryImagePath();
+                $primaryUrl = $primaryPath ? asset('storage/' . $primaryPath) : null;
+            @endphp
+
+            @if($primaryUrl)
+                <img id="productMainImage" src="{{ $primaryUrl }}" alt="{{ $product->name }}">
             @else
                 <div class="customer-product__placeholder">No image</div>
+            @endif
+
+            @if($imagePaths->count() > 1)
+                <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
+                    @foreach($imagePaths as $path)
+                        @php $url = asset('storage/' . $path); @endphp
+                        <button type="button"
+                                class="btn btn-outline"
+                                style="padding:0; border-radius:10px; overflow:hidden; width:72px; height:72px;"
+                                onclick="(function(){var img=document.getElementById('productMainImage'); if(img){ img.src='{{ $url }}'; }})();"
+                                aria-label="View image">
+                            <img src="{{ $url }}" alt="{{ $product->name }}" style="width:72px; height:72px; object-fit:cover; display:block;">
+                        </button>
+                    @endforeach
+                </div>
             @endif
         </div>
 

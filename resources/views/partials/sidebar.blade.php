@@ -17,14 +17,12 @@
                 <strong>User Management</strong>
                 <ul>
                     <a href="{{ route('users.index') }}">Users</a>
-                    <li><a href="#">Roles</a></li>
                 </ul>
             </li>
 
             <li>
                 <strong>Reports</strong>
                 <ul>
-                    <li><a href="#">Inventory Updates</a></li>
                 </ul>
             </li>
 
@@ -86,7 +84,6 @@
             <li>
                 <strong>Report</strong>
                 <ul>
-                    <li><a href="#">Inventory Updates</a></li>
                 </ul>
             </li>
 

@@ -1,43 +1,76 @@
-<x-guest-layout>
-    @if (session('warning'))
-        <div class="mb-4 font-medium text-sm text-yellow-700 dark:text-yellow-400">
-            {{ session('warning') }}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Verify Email | SOSS</title>
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
+</head>
+<body>
+
+<div class="auth-wrapper">
+    <div class="auth-card">
+        <div class="auth-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M4 7.5a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3v-9Z" stroke="currentColor" stroke-width="1.8"/>
+                <path d="M6.2 7.4 12 12.1l5.8-4.7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
         </div>
-    @endif
 
-    @if ($errors->any())
-        <div class="mb-4 font-medium text-sm text-red-700 dark:text-red-400">
-            {{ $errors->first() }}
-        </div>
-    @endif
+        <h2>Verify your email</h2>
+        <p class="auth-subtitle">
+            We sent a verification link to <span class="auth-highlight">{{ auth()->user()?->email }}</span>.
+            Please check your inbox and click the link to activate your account.
+        </p>
 
-    <div class="mb-4 text-sm text-gray-600 dark:text-gray-400">
-        {{ __('Thanks for signing up! Before getting started, could you verify your email address by clicking on the link we just emailed to you? If you didn\'t receive the email, we will gladly send you another.') }}
-    </div>
-
-    @if (session('status') == 'verification-link-sent')
-        <div class="mb-4 font-medium text-sm text-green-600 dark:text-green-400">
-            {{ __('A new verification link has been sent to the email address you provided during registration.') }}
-        </div>
-    @endif
-
-    <div class="mt-4 flex items-center justify-between">
-        <form method="POST" action="{{ route('verification.send') }}">
-            @csrf
-
-            <div>
-                <x-primary-button>
-                    {{ __('Resend Verification Email') }}
-                </x-primary-button>
+        @if (session('warning'))
+            <div class="auth-alert auth-alert--warning">
+                {{ session('warning') }}
             </div>
-        </form>
+        @endif
 
-        <form method="POST" action="{{ route('logout') }}">
-            @csrf
+        @if ($errors->any())
+            <div class="auth-alert auth-alert--error">
+                {{ $errors->first() }}
+            </div>
+        @endif
 
-            <button type="submit" class="underline text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800">
-                {{ __('Log Out') }}
-            </button>
-        </form>
+        @if (session('status') === 'verification-link-sent')
+            <div class="auth-alert auth-alert--success">
+                A new verification link has been sent. Please check your email again.
+            </div>
+        @endif
+
+        <div class="auth-tips">
+            <div class="auth-tips__title">Didn’t receive it?</div>
+            <ul class="auth-tips__list">
+                <li>Check your Spam / Junk folder</li>
+                <li>Make sure the email address above is correct</li>
+                <li>Wait 1–2 minutes (delivery can be delayed)</li>
+            </ul>
+        </div>
+
+        <div class="auth-actions">
+            <form method="POST" action="{{ route('verification.send') }}">
+                @csrf
+                <button class="btn btn-primary" type="submit" onclick="this.classList.add('loading')">
+                    Resend verification email
+                </button>
+            </form>
+
+            <form method="POST" action="{{ route('logout') }}">
+                @csrf
+                <button class="btn btn-outline" type="submit">
+                    Log out
+                </button>
+            </form>
+        </div>
+
+        <div class="auth-footer">
+            <p style="color:#ccc;">
+                Need help? Contact support from the home page.
+            </p>
+        </div>
     </div>
-</x-guest-layout>
+</div>
+
+</body>
+</html>

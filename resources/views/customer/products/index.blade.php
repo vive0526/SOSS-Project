@@ -100,9 +100,9 @@
             @endphp
             <article class="customer-product-card">
                 <a class="customer-product__media"
-                   href="{{ route('customer.products.show', $product) }}">
-                    @if($product->image)
-                        <img src="{{ asset('storage/' . $product->image) }}" alt="{{ $product->name }}">
+                   href="{{ route('customer.products.show', $product->slug) }}">
+                    @if($product->primaryImageUrl())
+                        <img src="{{ $product->primaryImageUrl() }}" alt="{{ $product->name }}">
                     @else
                         <div class="customer-product__placeholder">No image</div>
                     @endif
@@ -123,7 +123,7 @@
                     <div class="customer-product__price">
                         {{ $displayPrice !== null ? $displayPricePrefix . 'RM ' . number_format((float) $displayPrice, 2) : 'N/A' }}
                     </div>
-                    <a class="btn btn-outline" href="{{ route('customer.products.show', $product) }}">
+                    <a class="btn btn-outline" href="{{ route('customer.products.show', $product->slug) }}">
                         View Details
                     </a>
                 </div>

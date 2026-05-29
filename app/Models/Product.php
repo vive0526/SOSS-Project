@@ -7,6 +7,9 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class Product extends Model
 {
@@ -22,6 +25,7 @@ class Product extends Model
 
     protected $fillable = [
         'name',
+        'slug',
         'description',
         'price',
         'product_type',
@@ -35,15 +39,44 @@ class Product extends Model
         'image',
         'category_id',
         'user_id',
+        'is_active',
+        'is_featured',
     ];
 
     protected $casts = [
         'requires_maintenance' => 'boolean',
+        'is_active' => 'boolean',
+        'is_featured' => 'boolean',
         'maintenance_years' => 'integer',
         'maintenance_prices' => 'array',
         'maintenance_stocks' => 'array',
         'maintenance_reserved_quantities' => 'array',
     ];
+
+    protected static function booted(): void
+    {
+        static::saving(function (self $product) {
+            if (!empty($product->slug)) {
+                return;
+            }
+
+            $base = Str::slug((string) ($product->name ?? 'product'));
+            $base = $base !== '' ? $base : 'product';
+
+            $candidate = $base;
+            $query = self::query()->where('slug', $candidate);
+            if ($product->exists) {
+                $query->where('product_id', '!=', (string) $product->getKey());
+            }
+
+            if ($query->exists()) {
+                $suffix = $product->getKey() ?: uniqid();
+                $candidate = $base . '-' . Str::slug((string) $suffix);
+            }
+
+            $product->slug = $candidate;
+        });
+    }
 
     public function category(): BelongsTo
     {
@@ -53,6 +86,50 @@ class Product extends Model
     public function inventoryMovements(): HasMany
     {
         return $this->hasMany(InventoryMovement::class, 'product_id', 'product_id');
+    }
+
+    public function images(): HasMany
+    {
+        return $this->hasMany(ProductImage::class, 'product_id', 'product_id')
+            ->orderBy('sort_order')
+            ->orderByDesc('is_primary')
+            ->orderBy('id');
+    }
+
+    public function primaryImage(): ?ProductImage
+    {
+        return $this->images->firstWhere('is_primary', true)
+            ?? $this->images->first();
+    }
+
+    public function imagePaths(): Collection
+    {
+        $paths = $this->relationLoaded('images')
+            ? $this->images->pluck('path')
+            : $this->images()->pluck('path');
+
+        if (!empty($this->image)) {
+            $paths->prepend($this->image);
+        }
+
+        return $paths->filter(fn ($path) => is_string($path) && $path !== '')->unique()->values();
+    }
+
+    public function primaryImagePath(): ?string
+    {
+        $primary = $this->relationLoaded('images') ? $this->primaryImage()?->path : $this->images()->where('is_primary', true)->value('path');
+
+        return $primary ?: ($this->image ?: null);
+    }
+
+    public function primaryImageUrl(): ?string
+    {
+        $path = $this->primaryImagePath();
+        if (!$path) {
+            return null;
+        }
+
+        return Storage::disk('public')->url($path);
     }
 
     public function availableStock(): int

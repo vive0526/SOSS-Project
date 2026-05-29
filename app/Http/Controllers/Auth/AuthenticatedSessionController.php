@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Notifications\CompleteProfileNotification;
+use App\Notifications\LowStockDigestNotification;
+use App\Models\Product;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -53,6 +55,28 @@ class AuthenticatedSessionController extends Controller
                     if (!$exists) {
                         $user->notify(new CompleteProfileNotification($user->missingCheckoutProfileFields()));
                     }
+                }
+            }
+        }
+
+        if ($user && in_array(($user->role ?? null), ['admin', 'staff'], true) && Schema::hasTable('notifications') && Schema::hasTable('products')) {
+            $lowStockCount = Product::query()
+                ->whereRaw('(stock_quantity - COALESCE(reserved_quantity, 0)) > 0')
+                ->whereRaw('(stock_quantity - COALESCE(reserved_quantity, 0)) <= reorder_level')
+                ->count();
+            $outOfStockCount = Product::query()
+                ->whereRaw('(stock_quantity - COALESCE(reserved_quantity, 0)) <= 0')
+                ->count();
+
+            if ($lowStockCount > 0 || $outOfStockCount > 0) {
+                $digestDate = now()->toDateString();
+                $exists = $user->notifications()
+                    ->where('type', LowStockDigestNotification::class)
+                    ->where('data->digest_date', $digestDate)
+                    ->exists();
+
+                if (!$exists) {
+                    $user->notify(new LowStockDigestNotification($lowStockCount, $outOfStockCount, $digestDate));
                 }
             }
         }

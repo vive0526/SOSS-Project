@@ -67,6 +67,13 @@ Phone: {{ $order->shipping_phone ?? '—' }}
 Address: {{ $order->shipping_address ?? '—' }}, {{ $order->shipping_city ?? '' }} {{ $order->shipping_postcode ?? '' }}, {{ $order->shipping_state ?? '' }}, {{ $order->shipping_country ?? '' }}
 @endcomponent
 
+@if(filled($order->delivery_notes))
+@component('mail::panel')
+**Delivery notes**  
+{{ $order->delivery_notes }}
+@endcomponent
+@endif
+
 @component('mail::button', ['url' => route('customer.orders.show', $order)])
 View your order
 @endcomponent
@@ -74,4 +81,3 @@ View your order
 Thanks,  
 {{ config('app.name') }}
 @endcomponent
-

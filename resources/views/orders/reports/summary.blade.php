@@ -10,18 +10,20 @@
               style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end;">
             <div>
                 <label for="date_from">From</label>
-                <input type="date" name="date_from" value="{{ $filters['date_from'] ?? '' }}">
+                <input type="text" name="date_from" value="{{ $filters['date_from'] ?? '' }}"
+                       class="js-flatpickr-date" placeholder="YYYY-MM-DD" autocomplete="off">
             </div>
             <div>
                 <label for="date_to">To</label>
-                <input type="date" name="date_to" value="{{ $filters['date_to'] ?? '' }}">
+                <input type="text" name="date_to" value="{{ $filters['date_to'] ?? '' }}"
+                       class="js-flatpickr-date" placeholder="YYYY-MM-DD" autocomplete="off">
             </div>
-            <button type="submit" class="btn btn-primary">Apply</button>
-            <a class="btn" href="{{ route('orders.reports.summary') }}">Reset</a>
-            <a class="btn btn-outline" href="{{ route('orders.reports.summary', array_merge(request()->query(), ['export' => 'daily_csv'])) }}">Export Daily CSV</a>
-            <a class="btn btn-outline" href="{{ route('orders.reports.summary', array_merge(request()->query(), ['export' => 'status_csv'])) }}">Export Status CSV</a>
-            <a class="btn btn-outline" target="_blank" rel="noopener" href="{{ route('orders.reports.summary', array_merge(request()->query(), ['export' => 'pdf'])) }}">Export PDF</a>
-            <a class="btn btn-outline" href="{{ route('orders.reports.summary', array_merge(request()->query(), ['export' => 'excel'])) }}">Export Excel</a>
+            <div class="admin-export-actions">
+                <a class="btn btn-outline" target="_blank" rel="noopener" href="{{ route('orders.reports.summary', array_merge(request()->query(), ['export' => 'pdf'])) }}">Export PDF</a>
+                <a class="btn btn-outline" href="{{ route('orders.reports.summary', array_merge(request()->query(), ['export' => 'excel'])) }}">Export Excel</a>
+                <a class="btn btn-outline" href="{{ route('orders.reports.summary', array_merge(request()->query(), ['export' => 'daily_csv'])) }}">Export Daily CSV</a>
+                <a class="btn btn-outline" href="{{ route('orders.reports.summary', array_merge(request()->query(), ['export' => 'status_csv'])) }}">Export Status CSV</a>
+            </div>
         </form>
     </div>
 
@@ -109,4 +111,31 @@
             </table>
         @endif
     </div>
+
+    <script>
+        (function () {
+            const form = document.querySelector('form[action="{{ route('orders.reports.summary') }}"]');
+            if (!form) return;
+
+            const fields = form.querySelectorAll('input[name="date_from"], input[name="date_to"]');
+            if (!fields.length) return;
+
+            let t = null;
+            const submitSoon = () => {
+                if (t) window.clearTimeout(t);
+                t = window.setTimeout(() => {
+                    if (typeof form.requestSubmit === 'function') {
+                        form.requestSubmit();
+                    } else {
+                        form.submit();
+                    }
+                }, 200);
+            };
+
+            fields.forEach((el) => {
+                el.addEventListener('change', submitSoon);
+                el.addEventListener('blur', submitSoon);
+            });
+        })();
+    </script>
 @endsection

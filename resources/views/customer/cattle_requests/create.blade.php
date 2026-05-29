@@ -46,7 +46,7 @@
             </div>
 
             <div class="cr-summary__actions">
-                <a class="btn btn-outline" href="{{ route('customer.products.show', $product) }}">Back to product</a>
+                <a class="btn btn-outline" href="{{ route('customer.products.show', $product->slug) }}">Back to product</a>
             </div>
         </aside>
 
@@ -114,11 +114,14 @@
 
                     <div class="cr-field {{ $errors->has('preferred_date') ? 'is-invalid' : '' }}">
                         <label for="preferred_date">Preferred Date <span class="cr-required">*</span></label>
-                        <input type="date"
+                        <input type="text"
                                id="preferred_date"
                                name="preferred_date"
-                               min="{{ $minDate }}"
+                               data-min-date="{{ $minDate }}"
                                value="{{ old('preferred_date') }}"
+                               class="js-flatpickr-date"
+                               placeholder="YYYY-MM-DD"
+                               autocomplete="off"
                                required>
                         <div class="cr-help">Choose a date from today onward.</div>
                         @error('preferred_date')
@@ -140,7 +143,7 @@
                     <button type="submit" class="btn btn-primary" {{ $availableStock > 0 ? '' : 'disabled' }}>
                         Submit request
                     </button>
-                    <a class="btn btn-outline" href="{{ route('customer.products.show', $product) }}">Cancel</a>
+                    <a class="btn btn-outline" href="{{ route('customer.products.show', $product->slug) }}">Cancel</a>
                 </div>
             </form>
         </section>

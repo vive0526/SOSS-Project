@@ -94,10 +94,12 @@
                     <td><span class="{{ $statusClass }}">{{ $status }}</span></td>
                     @if($isAdmin || $isStaff)
                         <td>
-                            @if($isAdmin)
-                                <a class="btn-admin btn-edit" href="{{ route('inventory.edit', $product) }}">Edit</a>
-                            @endif
-                            <a class="btn-admin btn-activate" href="{{ route('inventory.adjust', $product) }}">Adjust</a>
+                            <div class="admin-actions">
+                                @if($isAdmin)
+                                    <a class="btn-admin btn-edit" href="{{ route('inventory.edit', $product) }}">Edit</a>
+                                @endif
+                                <a class="btn-admin btn-activate" href="{{ route('inventory.adjust', $product) }}">Adjust</a>
+                            </div>
                         </td>
                     @endif
                 </tr>

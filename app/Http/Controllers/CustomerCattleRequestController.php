@@ -70,7 +70,16 @@ class CustomerCattleRequestController extends Controller
             'notes' => 'nullable|string|max:2000',
         ]);
 
-        $product = Product::findOrFail($data['product_id']);
+        $product = Product::query()
+            ->where('product_id', $data['product_id'])
+            ->where('is_active', true)
+            ->first();
+
+        if (!$product) {
+            return back()->withErrors([
+                'product_id' => 'This product is no longer available.',
+            ])->withInput();
+        }
 
         if (($product->product_type ?? 'normal') !== 'cattle') {
             return back()->withErrors([

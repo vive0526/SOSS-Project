@@ -38,7 +38,16 @@ class CustomerCartController extends Controller
             'maintenance_year' => 'nullable|integer|min:1|max:5',
         ]);
 
-        $product = Product::findOrFail($data['product_id']);
+        $product = Product::query()
+            ->where('product_id', $data['product_id'])
+            ->where('is_active', true)
+            ->first();
+
+        if (!$product) {
+            return back()->withErrors([
+                'product_id' => 'This product is no longer available.',
+            ])->withInput();
+        }
         $maintenanceYear = $data['maintenance_year'] ?? null;
 
         if (($product->product_type ?? 'normal') === 'cattle') {
@@ -122,7 +131,10 @@ class CustomerCartController extends Controller
         }
 
         $item = $cart[$itemKey];
-        $product = Product::find($item['product_id']);
+        $product = Product::query()
+            ->where('product_id', (string) ($item['product_id'] ?? ''))
+            ->where('is_active', true)
+            ->first();
         if (!$product) {
             if ($request->expectsJson()) {
                 return response()->json([
@@ -243,7 +255,10 @@ class CustomerCartController extends Controller
         }
 
         $productIds = collect($cart)->pluck('product_id')->filter()->unique()->values()->all();
-        $products = Product::whereIn('product_id', $productIds)->get()->keyBy('product_id');
+        $products = Product::whereIn('product_id', $productIds)
+            ->where('is_active', true)
+            ->get()
+            ->keyBy('product_id');
 
         $pricedCart = [];
         $sanitizedCart = [];
@@ -304,7 +319,7 @@ class CustomerCartController extends Controller
                 'price' => $unitPrice,
                 'quantity' => $quantity,
                 'maintenance_year' => $maintenanceYear,
-                'image' => $product->image,
+                'image' => $product->primaryImagePath(),
             ]);
 
             $sanitizedCart[$resolvedKey] = [

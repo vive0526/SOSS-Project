@@ -6,9 +6,9 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Store')</title>
 
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @vite(['resources/css/app.css', 'resources/css/customer.css', 'resources/js/app.js'])
 </head>
-<body class="storefront-body">
+<body class="storefront-body @yield('body_class')">
     <div class="sf-topbar">
         <div class="sf-container sf-topbar__inner">
             <div class="sf-topbar__message">
@@ -177,72 +177,46 @@
     </main>
 
     <footer class="sf-footer">
-        <div class="sf-container sf-footer__grid">
-            <div>
-                <div class="sf-footer__title">Shop</div>
-                <a class="sf-footer__link" href="{{ route('customer.products.index') }}">All Products</a>
-                <a class="sf-footer__link" href="{{ route('customer.products.index', ['sort' => 'newest']) }}">New Arrivals</a>
-                <a class="sf-footer__link" href="{{ route('customer.products.index') }}">Collections</a>
-            </div>
-            <div>
-                <div class="sf-footer__title">Support</div>
-                <a class="sf-footer__link" href="{{ route('profile.edit') }}">Help Center</a>
-                <a class="sf-footer__link" href="{{ route('profile.edit') }}">Shipping</a>
-                <a class="sf-footer__link" href="{{ route('profile.edit') }}">Returns</a>
-            </div>
-            <div>
-                <div class="sf-footer__title">Company</div>
-                <a class="sf-footer__link" href="{{ url('/') }}">About</a>
-                <a class="sf-footer__link" href="{{ url('/') }}">Contact</a>
-                <a class="sf-footer__link" href="{{ url('/') }}">Policies</a>
-            </div>
-            <div>
-                <div class="sf-footer__title">Account</div>
-                <a class="sf-footer__link" href="{{ route('customer.orders.index') }}">Orders</a>
-                <a class="sf-footer__link" href="{{ route('profile.edit') }}">Profile</a>
-                <a class="sf-footer__link" href="{{ route('customer.cart.index') }}">Cart</a>
-            </div>
-        </div>
-        <div class="sf-container sf-footer__bottom">
-            <div class="sf-footer__fineprint">
-                © {{ date('Y') }} SOSS Marketplace. All rights reserved.
-            </div>
+        <div class="sf-container sf-footer__simple">
+            <div class="sf-footer__fineprint">© 2026 SOSS Marketplace. All rights reserved.</div>
         </div>
     </footer>
 
     @stack('modals')
 
+    @include('partials.background_sound')
+
     <script>
         (function () {
             document.body.classList.add('has-js');
 
-            const btn = document.getElementById('customerUserBtn');
-            const menu = document.getElementById('customerUserMenu');
-            if (!btn || !menu) return;
+            const userBtn = document.getElementById('customerUserBtn');
+            const userMenu = document.getElementById('customerUserMenu');
+            if (userBtn && userMenu) {
+                userBtn.addEventListener('click', () => {
+                    userMenu.classList.toggle('is-open');
+                });
 
-            btn.addEventListener('click', () => {
-                menu.classList.toggle('is-open');
-            });
-
-            document.addEventListener('click', (e) => {
-                if (!menu.classList.contains('is-open')) return;
-                if (btn.contains(e.target) || menu.contains(e.target)) return;
-                menu.classList.remove('is-open');
-            });
+                document.addEventListener('click', (e) => {
+                    if (!userMenu.classList.contains('is-open')) return;
+                    if (userBtn.contains(e.target) || userMenu.contains(e.target)) return;
+                    userMenu.classList.remove('is-open');
+                });
+            }
 
             const notifBtn = document.getElementById('sfNotifBtn');
             const notifMenu = document.getElementById('sfNotifMenu');
-            if (!notifBtn || !notifMenu) return;
+            if (notifBtn && notifMenu) {
+                notifBtn.addEventListener('click', () => {
+                    notifMenu.classList.toggle('is-open');
+                });
 
-            notifBtn.addEventListener('click', () => {
-                notifMenu.classList.toggle('is-open');
-            });
-
-            document.addEventListener('click', (e) => {
-                if (!notifMenu.classList.contains('is-open')) return;
-                if (notifBtn.contains(e.target) || notifMenu.contains(e.target)) return;
-                notifMenu.classList.remove('is-open');
-            });
+                document.addEventListener('click', (e) => {
+                    if (!notifMenu.classList.contains('is-open')) return;
+                    if (notifBtn.contains(e.target) || notifMenu.contains(e.target)) return;
+                    notifMenu.classList.remove('is-open');
+                });
+            }
         })();
     </script>
 </body>

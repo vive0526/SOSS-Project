@@ -11,6 +11,7 @@
 <body class="admin-body @yield('body_class')">
     {{-- Cursor spotlight layer (ADMIN ONLY, click-safe) --}}
     <div class="admin-spotlight" id="adminSpotlight"></div>
+    <div class="admin-scrim" id="adminNavScrim" aria-hidden="true"></div>
 
     @php
         $userRole = auth()->check() ? auth()->user()->role : null;
@@ -127,9 +128,6 @@
                         <span class="admin-nav__chev">ƒ-_</span>
                     </button>
                     <div class="admin-submenu" id="submenu-report">
-                        <a class="admin-submenu__link" href="#">
-                            Inventory Updates
-                        </a>
                         <a class="admin-submenu__link {{ request()->is('inventory/reports/levels') ? 'is-active' : '' }}"
                            href="{{ route('inventory.reports.levels') }}">
                             Inventory Level Report
@@ -169,9 +167,6 @@
                            href="{{ route('users.index') }}">
                             Users
                         </a>
-                        <a class="admin-submenu__link" href="#">
-                            Roles
-                        </a>
                     </div>
 
                     {{-- Report --}}
@@ -183,9 +178,6 @@
                         <span class="admin-nav__chev">ƒ-_</span>
                     </button>
                     <div class="admin-submenu" id="submenu-report-admin">
-                        <a class="admin-submenu__link" href="#">
-                            Inventory Updates
-                        </a>
                         <a class="admin-submenu__link {{ request()->is('reports/orders/summary') ? 'is-active' : '' }}"
                            href="{{ route('orders.reports.summary') }}">
                             Order Summary
@@ -297,6 +289,12 @@
             {{-- HEADER --}}
             <header class="admin-header">
                 <div class="admin-header__left">
+                    <button class="admin-mobile-toggle" type="button" id="adminMobileNavBtn"
+                            aria-label="Open menu" aria-controls="adminSidebar" aria-expanded="false">
+                        <span class="admin-mobile-toggle__bar"></span>
+                        <span class="admin-mobile-toggle__bar"></span>
+                        <span class="admin-mobile-toggle__bar"></span>
+                    </button>
                     <div class="admin-header__title">
                         @yield('page_title', 'Dashboard')
                     </div>
@@ -310,6 +308,57 @@
                         @php
                             $user = auth()->user();
                         @endphp
+
+                        <div class="admin-header__actions">
+                        <div class="admin-notifications">
+                            <button class="admin-notif-btn" type="button" id="adminNotifBtn" aria-haspopup="true">
+                                <span class="admin-notif-icon" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M12 22c1.2 0 2.2-1 2.2-2.2h-4.4C9.8 21 10.8 22 12 22Z" fill="currentColor"/>
+                                        <path d="M18 16.8V11c0-3.1-1.7-5.7-4.6-6.4V4a1.4 1.4 0 0 0-2.8 0v.6C7.7 5.3 6 7.9 6 11v5.8l-1.2 1.2c-.6.6-.2 1.8.7 1.8h13c.9 0 1.3-1.2.7-1.8L18 16.8Z" fill="currentColor" opacity="0.92"/>
+                                    </svg>
+                                </span>
+                                <span class="sr-only">Notifications</span>
+                                @if(!empty($adminUnreadNotificationsCount))
+                                    <span class="admin-badge" aria-label="Unread notifications">{{ $adminUnreadNotificationsCount }}</span>
+                                @endif
+                            </button>
+                            <div class="admin-notif-menu" id="adminNotifMenu">
+                                <div class="admin-notif-menu__head">
+                                    <div class="admin-notif-menu__title">Notifications</div>
+                                    <a class="admin-notif-menu__link" href="{{ route('system-notifications.index') }}">View all</a>
+                                </div>
+
+                                @php
+                                    $preview = $adminNotificationsPreview ?? collect();
+                                @endphp
+                                @if($preview->isEmpty())
+                                    <div class="admin-notif-menu__empty">No notifications yet.</div>
+                                @else
+                                    <div class="admin-notif-menu__list">
+                                        @foreach($preview as $notification)
+                                            @php
+                                                $data = $notification->data ?? [];
+                                                $title = $data['title'] ?? 'Notification';
+                                                $message = $data['message'] ?? '';
+                                                $actionUrl = $data['action_url'] ?? null;
+                                                $unread = $notification->read_at === null;
+                                            @endphp
+                                            <a class="admin-notif-item {{ $unread ? 'is-unread' : '' }}"
+                                               href="{{ $actionUrl ?: route('system-notifications.index') }}">
+                                                <div class="admin-notif-item__title">{{ $title }}</div>
+                                                @if($message)
+                                                    <div class="admin-notif-item__msg">{{ $message }}</div>
+                                                @endif
+                                                <div class="admin-notif-item__meta">
+                                                    {{ $notification->created_at?->diffForHumans() }}
+                                                </div>
+                                            </a>
+                                        @endforeach
+                                    </div>
+                                @endif
+                            </div>
+                        </div>
 
                         <div class="admin-user">
                             <button class="admin-user__btn" type="button" id="adminUserBtn">
@@ -341,6 +390,7 @@
                                     </button>
                                 </form>
                             </div>
+                        </div>
                         </div>
                     @endauth
                 </div>
@@ -397,10 +447,68 @@
             });
         })();
 
+        // Mobile sidebar toggle
+        (function () {
+            const btn = document.getElementById('adminMobileNavBtn');
+            const scrim = document.getElementById('adminNavScrim');
+            const sidebar = document.querySelector('.admin-sidebar');
+            if (!btn || !scrim || !sidebar) return;
+
+            sidebar.setAttribute('id', 'adminSidebar');
+
+            const setOpen = (open) => {
+                document.body.classList.toggle('admin-nav-open', open);
+                btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+            };
+
+            btn.addEventListener('click', () => {
+                const open = !document.body.classList.contains('admin-nav-open');
+                setOpen(open);
+            });
+
+            scrim.addEventListener('click', () => setOpen(false));
+
+            document.addEventListener('keydown', (e) => {
+                if (e.key !== 'Escape') return;
+                if (!document.body.classList.contains('admin-nav-open')) return;
+                setOpen(false);
+            });
+
+            sidebar.addEventListener('click', (e) => {
+                const link = e.target.closest('a');
+                if (!link) return;
+                if (window.matchMedia('(max-width: 980px)').matches) {
+                    setOpen(false);
+                }
+            });
+
+            const mq = window.matchMedia('(min-width: 981px)');
+            mq.addEventListener('change', () => {
+                if (mq.matches) setOpen(false);
+            });
+        })();
+
         // User dropdown
         (function () {
             const btn = document.getElementById('adminUserBtn');
             const menu = document.getElementById('adminUserMenu');
+            if (!btn || !menu) return;
+
+            btn.addEventListener('click', () => {
+                menu.classList.toggle('is-open');
+            });
+
+            document.addEventListener('click', (e) => {
+                if (!menu.classList.contains('is-open')) return;
+                if (btn.contains(e.target) || menu.contains(e.target)) return;
+                menu.classList.remove('is-open');
+            });
+        })();
+
+        // Admin notifications dropdown
+        (function () {
+            const btn = document.getElementById('adminNotifBtn');
+            const menu = document.getElementById('adminNotifMenu');
             if (!btn || !menu) return;
 
             btn.addEventListener('click', () => {

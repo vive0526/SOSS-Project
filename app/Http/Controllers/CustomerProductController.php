@@ -5,15 +5,46 @@ namespace App\Http\Controllers;
 use App\Models\Category;
 use App\Models\Product;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class CustomerProductController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Product::with('category');
+        $query = Product::with(['category', 'images'])
+            ->where('is_active', true);
 
         if ($request->filled('search')) {
-            $search = $request->input('search');
+            $search = trim((string) $request->input('search'));
+
+            if ($search !== '') {
+                $candidateSlug = Str::slug($search);
+
+                $exact = Product::query()
+                    ->where('is_active', true)
+                    ->where(function ($q) use ($search, $candidateSlug) {
+                        $q->where('slug', $candidateSlug)
+                            ->orWhereRaw('LOWER(name) = ?', [mb_strtolower($search)]);
+                    })
+                    ->select(['slug'])
+                    ->limit(2)
+                    ->get();
+
+                if ($exact->count() === 1) {
+                    return redirect()->route('customer.products.show', $exact->first()->slug);
+                }
+
+                $categoryExact = Category::query()
+                    ->whereRaw('LOWER(name) = ?', [mb_strtolower($search)])
+                    ->select(['id'])
+                    ->limit(2)
+                    ->get();
+
+                if ($categoryExact->count() === 1) {
+                    return redirect()->route('customer.products.index', ['category_id' => $categoryExact->first()->id]);
+                }
+            }
+
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', '%' . $search . '%')
                     ->orWhere('description', 'like', '%' . $search . '%');
@@ -55,14 +86,23 @@ class CustomerProductController extends Controller
         return view('customer.products.index', compact('products', 'categories'));
     }
 
-    public function show(Product $product)
+    public function show(string $productSlug)
     {
+        $product = Product::with(['category', 'images'])
+            ->where('is_active', true)
+            ->where('slug', $productSlug)
+            ->firstOrFail();
+
         return view('customer.products.show', compact('product'));
     }
 
     public function stock(Request $request, Product $product)
     {
         $product->refresh();
+
+        if (!(bool) ($product->is_active ?? false)) {
+            abort(404);
+        }
 
         $maintenanceYear = null;
         if ($request->filled('maintenance_year') && is_numeric($request->input('maintenance_year'))) {

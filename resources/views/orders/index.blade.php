@@ -77,7 +77,9 @@
     <div class="admin-card">
         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:16px;">
             <div>
-                <div style="color:#bfbfbf; font-size:12px;">Total Orders</div>
+                <div style="color:#bfbfbf; font-size:12px;">
+                    Total Orders{{ $hasFilters ? ' (filtered)' : '' }}
+                </div>
                 <div style="font-size:24px; font-weight:700;">{{ $totalOrders }}</div>
             </div>
             @foreach($statuses as $status)

@@ -26,6 +26,7 @@ use App\Http\Controllers\CustomerAddressController;
 use App\Http\Controllers\StripeRefundController;
 use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\AdminShippingTaxSettingsController;
+use App\Http\Controllers\SystemNotificationController;
 use App\Models\Category;
 use App\Models\Product;
 
@@ -35,12 +36,29 @@ use App\Models\Product;
 |--------------------------------------------------------------------------|
 */
 Route::get('/', function () {
-    $featuredProducts = Product::with('category')
+    $featuredProducts = Product::with(['category', 'images'])
+        ->where('is_active', true)
+        ->where('is_featured', true)
         ->whereRaw('(stock_quantity - COALESCE(reserved_quantity, 0)) > 0')
         ->orderByRaw('(stock_quantity - COALESCE(reserved_quantity, 0)) desc')
         ->orderByDesc('updated_at')
         ->take(4)
         ->get();
+
+    if ($featuredProducts->count() < 4) {
+        $fallback = Product::with(['category', 'images'])
+            ->where('is_active', true)
+            ->whereRaw('(stock_quantity - COALESCE(reserved_quantity, 0)) > 0')
+            ->when($featuredProducts->isNotEmpty(), function ($query) use ($featuredProducts) {
+                $query->whereNotIn('product_id', $featuredProducts->pluck('product_id')->all());
+            })
+            ->orderByRaw('(stock_quantity - COALESCE(reserved_quantity, 0)) desc')
+            ->orderByDesc('updated_at')
+            ->take(4 - $featuredProducts->count())
+            ->get();
+
+        $featuredProducts = $featuredProducts->concat($fallback);
+    }
 
     $heroProduct = $featuredProducts->first();
 
@@ -63,19 +81,46 @@ Route::get('/staff/dashboard', function () {
     return view('staff.dashboard');
 })->middleware(['auth', 'role:staff,admin']);
 
+Route::middleware(['auth', 'role:staff,admin'])
+    ->prefix('system-notifications')
+    ->name('system-notifications.')
+    ->group(function () {
+        Route::get('/', [SystemNotificationController::class, 'index'])
+            ->name('index');
+        Route::post('/read-all', [SystemNotificationController::class, 'readAll'])
+            ->name('read-all');
+        Route::post('/{notificationId}/read', [SystemNotificationController::class, 'read'])
+            ->name('read');
+    });
+
 Route::get('/customer/dashboard', function () {
-    $featuredProducts = Product::with('category')
-        ->orderByDesc('created_at')
+    $featuredProducts = Product::with(['category', 'images'])
+        ->where('is_active', true)
+        ->where('is_featured', true)
+        ->orderByDesc('updated_at')
         ->take(8)
         ->get();
+
+    if ($featuredProducts->count() < 8) {
+        $fallback = Product::with(['category', 'images'])
+            ->where('is_active', true)
+            ->when($featuredProducts->isNotEmpty(), function ($query) use ($featuredProducts) {
+                $query->whereNotIn('product_id', $featuredProducts->pluck('product_id')->all());
+            })
+            ->orderByDesc('updated_at')
+            ->take(8 - $featuredProducts->count())
+            ->get();
+
+        $featuredProducts = $featuredProducts->concat($fallback);
+    }
     $collections = Category::withCount('products')
         ->orderByDesc('products_count')
         ->orderBy('name')
         ->take(6)
         ->get();
-    $totalProducts = Product::count();
+    $totalProducts = Product::where('is_active', true)->count();
     $categoryCount = Category::count();
-    $inStockCount = Product::whereRaw('(stock_quantity - COALESCE(reserved_quantity, 0)) > 0')->count();
+    $inStockCount = Product::where('is_active', true)->whereRaw('(stock_quantity - COALESCE(reserved_quantity, 0)) > 0')->count();
 
     return view('customer.dashboard', compact(
         'featuredProducts',
@@ -270,6 +315,8 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
 |--------------------------------------------------------------------------|
 */
 Route::middleware(['auth', 'role:admin,staff'])->group(function () {
+    Route::delete('/products/{product}/images/{image}', [ProductController::class, 'destroyImage'])
+        ->name('products.images.destroy');
     Route::resource('products', ProductController::class);  // CRUD operations
 });
 
@@ -411,7 +458,12 @@ Route::middleware(['auth', 'verified', 'role:customer'])
             ->name('products.index');
         Route::get('/products/{product}/stock', [CustomerProductController::class, 'stock'])
             ->name('products.stock');
-        Route::get('/products/{product}', [CustomerProductController::class, 'show'])
+        Route::get('/products/{product}', function (Product $product) {
+            return redirect()->route('customer.products.show', $product->slug);
+        })
+            ->where('product', '^PRD\\d+$')
+            ->name('products.show.legacy');
+        Route::get('/products/{productSlug}', [CustomerProductController::class, 'show'])
             ->name('products.show');
 
         Route::get('/cattle-requests', [CustomerCattleRequestController::class, 'index'])

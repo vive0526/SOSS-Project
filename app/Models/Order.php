@@ -93,6 +93,7 @@ class Order extends Model
         'shipping_state',
         'shipping_postcode',
         'shipping_country',
+        'delivery_notes',
         'assigned_to',
         'assigned_to_user_id',
         'cancelled_at',

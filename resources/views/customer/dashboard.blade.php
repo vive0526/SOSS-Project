@@ -1,6 +1,7 @@
 @extends('layouts.storefront')
 
 @section('title', 'Home')
+@section('body_class', 'customer-dashboard')
 @section('hide_masthead', '1')
 
 @push('modals')
@@ -14,8 +15,8 @@
 
 @section('content')
     @php
-        $heroProduct = $featuredProducts->firstWhere('image', '!=', null);
-        $heroImageUrl = $heroProduct?->image ? asset('storage/' . $heroProduct->image) : null;
+        $heroProduct = $featuredProducts->first(fn ($product) => (bool) $product?->primaryImageUrl());
+        $heroImageUrl = $heroProduct?->primaryImageUrl();
     @endphp
 
     <section class="sf-hero" @if($heroImageUrl) style="--sf-hero-image: url('{{ $heroImageUrl }}');" @endif>
@@ -80,9 +81,9 @@
                 @endphp
                 <article class="customer-product-card">
                     <a class="customer-product__media"
-                       href="{{ route('customer.products.show', $product) }}">
-                        @if($product->image)
-                            <img src="{{ asset('storage/' . $product->image) }}" alt="{{ $product->name }}">
+                       href="{{ route('customer.products.show', $product->slug) }}">
+                        @if($product->primaryImageUrl())
+                            <img src="{{ $product->primaryImageUrl() }}" alt="{{ $product->name }}">
                         @else
                             <div class="customer-product__placeholder">No image</div>
                         @endif
@@ -100,7 +101,7 @@
                         <div class="customer-product__price">
                             {{ $displayPrice !== null ? $displayPricePrefix . 'RM ' . number_format((float) $displayPrice, 2) : 'N/A' }}
                         </div>
-                        <a class="btn btn-outline" href="{{ route('customer.products.show', $product) }}">
+                        <a class="btn btn-outline" href="{{ route('customer.products.show', $product->slug) }}">
                             View
                         </a>
                     </div>

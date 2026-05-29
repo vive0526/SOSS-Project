@@ -75,6 +75,7 @@ function initAdminOrderDatePickers() {
             dateFormat: 'Y-m-d',
             allowInput: true,
             disableMobile: true,
+            minDate: el.dataset.minDate || undefined,
         });
     });
 }

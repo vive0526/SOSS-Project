@@ -12,8 +12,31 @@
             <label for="name">Product Name</label>
             <input type="text" name="name" required value="{{ old('name') }}">
 
+            <label for="slug">SEO Slug (optional)</label>
+            <input type="text" name="slug" value="{{ old('slug') }}" placeholder="e.g. premium-cattle-feed">
+            <small style="display:block; margin-top:-6px; margin-bottom:12px; color:#666;">
+                Leave blank to auto-generate from the product name.
+            </small>
+
             <label for="description">Description</label>
             <textarea name="description" required>{{ old('description') }}</textarea>
+
+            <div style="display:flex; gap:16px; margin: 12px 0 18px;">
+                <div>
+                    <input type="hidden" name="is_active" value="0">
+                    <label style="display:flex; gap:8px; align-items:center; margin:0;">
+                        <input type="checkbox" name="is_active" value="1" {{ old('is_active', '1') ? 'checked' : '' }}>
+                        Active (visible in storefront)
+                    </label>
+                </div>
+                <div>
+                    <input type="hidden" name="is_featured" value="0">
+                    <label style="display:flex; gap:8px; align-items:center; margin:0;">
+                        <input type="checkbox" name="is_featured" value="1" {{ old('is_featured') ? 'checked' : '' }}>
+                        Featured
+                    </label>
+                </div>
+            </div>
 
             <label for="category_id">Category</label>
             <select name="category_id">
@@ -77,6 +100,9 @@
 
             <label for="image">Product Image</label>
             <input type="file" name="image" accept="image/*">
+
+            <label for="gallery_images">Product Gallery (optional)</label>
+            <input type="file" name="gallery_images[]" accept="image/*" multiple>
 
             <button type="submit" class="btn btn-primary">Save Product</button>
         </form>

@@ -5,25 +5,35 @@
 @section('page_subtitle', 'Manage your products')
 
 @section('content')
-        <div class="admin-card">
-        <a href="{{ route('products.create') }}" class="btn btn-add">Add Product</a>
+    <div class="admin-card">
+        <div class="admin-toolbar">
+            <a href="{{ route('products.create') }}" class="btn btn-add">Add Product</a>
 
-        <form id="productFiltersForm" method="GET" action="{{ route('products.index') }}" style="margin-top: 15px;">
-            <label for="search">Search</label>
-            <input type="text" name="search" value="{{ request('search') }}" placeholder="Product name or description">
+            <form id="productFiltersForm" method="GET" action="{{ route('products.index') }}"
+                  class="admin-filter"
+                  style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end;">
+                <div>
+                    <label for="search">Search</label>
+                    <input type="text" name="search" value="{{ request('search') }}"
+                           placeholder="Product name or description">
+                </div>
 
-            <label for="category_id">Category</label>
-            <select name="category_id">
-                <option value="">All categories</option>
-                @foreach($categories as $category)
-                    <option value="{{ $category->id }}"
-                        {{ (string) request('category_id') === (string) $category->id ? 'selected' : '' }}>
-                        {{ $category->name }}
-                    </option>
-                @endforeach
-            </select>
+                <div>
+                    <label for="category_id">Category</label>
+                    <select name="category_id">
+                        <option value="">All categories</option>
+                        @foreach($categories as $category)
+                            <option value="{{ $category->id }}"
+                                {{ (string) request('category_id') === (string) $category->id ? 'selected' : '' }}>
+                                {{ $category->name }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
 
-        </form>
+                <a class="btn btn-outline" href="{{ route('products.index') }}">Reset</a>
+            </form>
+        </div>
 
         <table>
             <thead>
@@ -31,6 +41,9 @@
                     <th>No</th>
                     <th>Image</th>
                     <th>Name</th>
+                    <th>Slug</th>
+                    <th>Active</th>
+                    <th>Featured</th>
                     <th>Category</th>
                     <th>Price</th>
                     <th>Maintenance</th>
@@ -49,13 +62,16 @@
                 <tr>
                     <td>{{ ($products->firstItem() ?? 0) + $index }}</td>
                     <td>
-                        @if($product->image)
-                            <img src="{{ asset('storage/' . $product->image) }}" alt="{{ $product->name }}" style="width:60px;height:60px;object-fit:cover;">
+                        @if($product->primaryImageUrl())
+                            <img src="{{ $product->primaryImageUrl() }}" alt="{{ $product->name }}" style="width:60px;height:60px;object-fit:cover;">
                         @else
                             —
                         @endif
                     </td>
                     <td>{{ $product->name }}</td>
+                    <td style="max-width: 220px; word-break: break-word;">{{ $product->slug ?? '—' }}</td>
+                    <td>{{ $product->is_active ? 'Yes' : 'No' }}</td>
+                    <td>{{ $product->is_featured ? 'Yes' : 'No' }}</td>
                     <td>{{ $product->category?->name ?? 'Uncategorized' }}</td>
                     <td>
                         @if($product->requires_maintenance && !empty($product->maintenance_prices))
@@ -101,12 +117,17 @@
                     <td>{{ $reserved }}</td>
                     <td>{{ $available }}</td>
                     <td>
-                        <a href="{{ route('products.edit', $product) }}" class="btn-admin btn-edit">Edit</a>
-                        <form action="{{ route('products.destroy', $product) }}" method="POST" style="display:inline;">
-                            @csrf
-                            @method('DELETE')
-                            <button type="submit" class="btn-admin btn-delete" onclick="return confirm('Delete this product?')">Delete</button>
-                        </form>
+                        <div class="admin-actions">
+                            <a href="{{ route('products.edit', $product) }}" class="btn-admin btn-edit">Edit</a>
+                            <form action="{{ route('products.destroy', $product) }}" method="POST">
+                                @csrf
+                                @method('DELETE')
+                                <button type="submit" class="btn-admin btn-delete"
+                                        onclick="return confirm('Delete this product?')">
+                                    Delete
+                                </button>
+                            </form>
+                        </div>
                     </td>
                 </tr>
                 @endforeach

@@ -78,8 +78,7 @@
     <div class="customer-card">
         <a class="btn btn-outline" href="{{ route('customer.cattle-requests.index') }}">Back to Requests</a>
         @if($request->product)
-            <a class="btn btn-primary" href="{{ route('customer.products.show', $request->product) }}">View Product</a>
+            <a class="btn btn-primary" href="{{ route('customer.products.show', $request->product->slug) }}">View Product</a>
         @endif
     </div>
 @endsection
-

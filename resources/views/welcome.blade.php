@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sawit Online Sales System</title>
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @vite(['resources/css/app.css', 'resources/css/customer.css', 'resources/js/app.js'])
 </head>
 <body class="welcome-page">
 @php
@@ -12,6 +12,8 @@
     $primaryCtaUrl = auth()->check() ? route('dashboard') : $shopNowUrl;
     $primaryCtaLabel = auth()->check() ? 'Go to Dashboard' : 'Shop Now';
 @endphp
+
+@include('partials.background_sound')
 
 <header class="welcome-header">
     <a class="welcome-brand" href="{{ route('welcome') }}">
@@ -72,8 +74,8 @@
                 <div class="welcome-showcase__bg"></div>
 
                 <div class="welcome-showcase__image">
-                    @if(!empty($heroProduct?->image))
-                        <img src="{{ asset('storage/' . $heroProduct->image) }}" alt="{{ $heroProduct->name }}">
+                    @if($heroProduct?->primaryImageUrl())
+                        <img src="{{ $heroProduct->primaryImageUrl() }}" alt="{{ $heroProduct->name }}">
                     @else
                         <div class="welcome-showcase__placeholder">Your product image will appear here</div>
                     @endif
@@ -100,8 +102,8 @@
                                     }
                                 @endphp
                                 <div class="welcome-panel__thumb">
-                                    @if($product->image)
-                                        <img src="{{ asset('storage/' . $product->image) }}" alt="{{ $product->name }}">
+                                    @if($product->primaryImageUrl())
+                                        <img src="{{ $product->primaryImageUrl() }}" alt="{{ $product->name }}">
                                     @else
                                         <span class="welcome-panel__thumbText">No image</span>
                                     @endif
@@ -177,8 +179,8 @@
                 @endphp
                 <article class="welcome-product-card">
                     <div class="welcome-product-card__media">
-                        @if($product->image)
-                            <img src="{{ asset('storage/' . $product->image) }}" alt="{{ $product->name }}">
+                        @if($product->primaryImageUrl())
+                            <img src="{{ $product->primaryImageUrl() }}" alt="{{ $product->name }}">
                         @else
                             <div class="welcome-product-card__placeholder">No image</div>
                         @endif

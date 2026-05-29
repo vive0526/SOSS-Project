@@ -13,8 +13,31 @@
             <label for="name">Product Name</label>
             <input type="text" name="name" required value="{{ old('name', $product->name) }}">
 
+            <label for="slug">SEO Slug (optional)</label>
+            <input type="text" name="slug" value="{{ old('slug', $product->slug) }}" placeholder="e.g. premium-cattle-feed">
+            <small style="display:block; margin-top:-6px; margin-bottom:12px; color:#666;">
+                Leave blank to auto-generate from the product name.
+            </small>
+
             <label for="description">Description</label>
             <textarea name="description" required>{{ old('description', $product->description) }}</textarea>
+
+            <div style="display:flex; gap:16px; margin: 12px 0 18px;">
+                <div>
+                    <input type="hidden" name="is_active" value="0">
+                    <label style="display:flex; gap:8px; align-items:center; margin:0;">
+                        <input type="checkbox" name="is_active" value="1" {{ old('is_active', $product->is_active) ? 'checked' : '' }}>
+                        Active (visible in storefront)
+                    </label>
+                </div>
+                <div>
+                    <input type="hidden" name="is_featured" value="0">
+                    <label style="display:flex; gap:8px; align-items:center; margin:0;">
+                        <input type="checkbox" name="is_featured" value="1" {{ old('is_featured', $product->is_featured) ? 'checked' : '' }}>
+                        Featured
+                    </label>
+                </div>
+            </div>
 
             <label for="category_id">Category</label>
             <select name="category_id">
@@ -83,9 +106,39 @@
             <label for="image">Product Image</label>
             <input type="file" name="image" accept="image/*">
 
+            <label for="gallery_images">Product Gallery (optional)</label>
+            <input type="file" name="gallery_images[]" accept="image/*" multiple>
+
             <button type="submit" class="btn btn-primary">Update Product</button>
         </form>
     </div>
+
+    @if($product->images && $product->images->count())
+        <div class="admin-card" style="margin-top:16px;">
+            <div style="font-weight:600; margin-bottom:8px;">Current Gallery</div>
+            <div style="display:flex; flex-wrap:wrap; gap:12px;">
+                @foreach($product->images as $img)
+                    <div style="width:140px;">
+                        <div style="border:1px solid #ddd; border-radius:12px; overflow:hidden; width:140px; height:140px;">
+                            <img src="{{ asset('storage/' . $img->path) }}" alt="Product image" style="width:140px; height:140px; object-fit:cover; display:block;">
+                        </div>
+                        <div style="margin-top:6px; display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                            @if($img->is_primary)
+                                <span class="customer-badge">Primary</span>
+                            @else
+                                <span style="color:#666; font-size:12px;">&nbsp;</span>
+                            @endif
+                            <form action="{{ route('products.images.destroy', [$product, $img]) }}" method="POST" onsubmit="return confirm('Remove this image?')">
+                                @csrf
+                                @method('DELETE')
+                                <button type="submit" class="btn-admin btn-delete" style="padding:6px 10px;">Delete</button>
+                            </form>
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+        </div>
+    @endif
 
     <script>
         (function () {

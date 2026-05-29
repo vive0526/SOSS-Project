@@ -110,17 +110,22 @@ class OrderController extends Controller
             $query->where('created_at', '<=', $to);
         }
 
-        $orders = $query->paginate(20)->withQueryString();
-        $statusCounts = Order::select('status', DB::raw('count(*) as total'))
+        $totalOrders = (clone $query)->reorder()->count();
+        $statusCounts = (clone $query)
+            ->reorder()
+            ->select('status', DB::raw('count(*) as total'))
             ->groupBy('status')
             ->pluck('total', 'status');
+
+        $orders = $query->paginate(20)->withQueryString();
 
         return view('orders.index', [
             'orders' => $orders,
             'statuses' => Order::STATUSES,
             'shipmentStatuses' => Order::SHIPMENT_STATUSES,
             'statusCounts' => $statusCounts,
-            'totalOrders' => Order::count(),
+            'totalOrders' => $totalOrders,
+            'hasFilters' => $hasFilters,
             'filters' => $request->only(['status', 'shipment_status', 'payment', 'search', 'date_from', 'date_to', 'show_all']),
         ]);
     }
