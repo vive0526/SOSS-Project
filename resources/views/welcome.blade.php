@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sawit Online Sales System</title>
+    <link rel="icon" type="image/png" href="{{ asset('images/logo.png') }}">
     @vite(['resources/css/app.css', 'resources/css/customer.css', 'resources/js/app.js'])
 </head>
 <body class="welcome-page">
@@ -17,7 +18,7 @@
 
 <header class="welcome-header">
     <a class="welcome-brand" href="{{ route('welcome') }}">
-        <span class="welcome-brand__mark">SOSS</span>
+        <img src="{{ asset('images/logo.png') }}" alt="SOSS Logo" class="welcome-brand__logo">
         <span class="welcome-brand__sub">Sawit Online Sales System</span>
     </a>
 
