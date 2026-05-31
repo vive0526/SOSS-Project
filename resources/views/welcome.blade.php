@@ -18,7 +18,7 @@
 
 <header class="welcome-header">
     <a class="welcome-brand" href="{{ route('welcome') }}">
-        <img src="{{ asset('images/logo.png') }}" alt="SOSS Logo" class="welcome-brand__logo">
+        <span class="welcome-brand__mark">SOSS</span>
         <span class="welcome-brand__sub">Sawit Online Sales System</span>
     </a>
 

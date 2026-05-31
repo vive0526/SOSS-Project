@@ -520,15 +520,9 @@ button:disabled {
 
 .welcome-brand {
     display: flex;
-    align-items: center;
+    align-items: baseline;
     gap: 10px;
     color: var(--white);
-}
-
-.welcome-brand__logo {
-    height: 40px;
-    width: auto;
-    object-fit: contain;
 }
 
 .welcome-brand__mark {
