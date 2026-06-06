@@ -141,4 +141,14 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         return $this->hasMany(CustomerAddress::class, 'user_id', 'user_id')->orderByDesc('is_default')->orderByDesc('id');
     }
+
+    public function orderReturnRequests(): HasMany
+    {
+        return $this->hasMany(OrderReturnRequest::class, 'user_id', 'user_id')->orderByDesc('created_at');
+    }
+
+    public function productReviews(): HasMany
+    {
+        return $this->hasMany(ProductReview::class, 'user_id', 'user_id')->latest();
+    }
 }

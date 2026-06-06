@@ -88,6 +88,16 @@ class Product extends Model
         return $this->hasMany(InventoryMovement::class, 'product_id', 'product_id');
     }
 
+    public function reviews(): HasMany
+    {
+        return $this->hasMany(ProductReview::class, 'product_id', 'product_id')->latest();
+    }
+
+    public function approvedReviews(): HasMany
+    {
+        return $this->reviews()->where('status', 'approved');
+    }
+
     public function images(): HasMany
     {
         return $this->hasMany(ProductImage::class, 'product_id', 'product_id')

@@ -2945,6 +2945,19 @@ button:disabled {
   color: #c92a2a;
 }
 
+.customer-status--refund_pending {
+  background: #fff3bf;
+  border-color: #ffe8a1;
+  color: #8a6b00;
+}
+
+.customer-status--partial_refund,
+.customer-status--refunded {
+  background: #e7f5ff;
+  border-color: #a5d8ff;
+  color: #1c5d99;
+}
+
 .customer-table {
   width: 100%;
   border-collapse: collapse;

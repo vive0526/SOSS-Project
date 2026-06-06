@@ -83,6 +83,14 @@
         @else
             <div style="display:grid; gap:16px;">
                 @foreach($orders as $order)
+                    @php
+                        $paymentLabel = match ($order->payment_status) {
+                            'refunded' => 'Full Refunded',
+                            'partial_refund' => 'Partial Refund',
+                            'refund_pending' => 'Refund Pending',
+                            default => ucwords(str_replace('_', ' ', $order->payment_status ?? 'unpaid')),
+                        };
+                    @endphp
                     <div class="customer-card" style="display:grid; gap:12px;">
                         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
                             <div>
@@ -101,11 +109,16 @@
                                 <span class="customer-status customer-status--{{ $order->shipment_status }}">
                                     {{ ucfirst($order->shipment_status) }}
                                 </span>
+                                @if(in_array($order->payment_status, ['refund_pending', 'partial_refund', 'refunded'], true))
+                                    <span class="customer-status customer-status--{{ $order->payment_status }}">
+                                        {{ $paymentLabel }}
+                                    </span>
+                                @endif
                             </div>
                         </div>
                         <div style="display:flex; gap:18px; flex-wrap:wrap; color:#5e4a3b;">
                             <div><strong>Tracking:</strong> {{ $order->tracking_number ?? '-' }}</div>
-                            <div><strong>Payment:</strong> {{ $order->payment_method ?? '-' }}</div>
+                            <div><strong>Payment:</strong> {{ $paymentLabel }}</div>
                             <div>
                                 <strong>Total:</strong>
                                 {{ $order->total_amount > 0 ? 'RM ' . number_format((float) $order->total_amount, 2) : '-' }}
@@ -116,6 +129,11 @@
                             @if($order->status === 'pending' && $order->shipment_status === 'pending')
                                 <a class="btn btn-primary" href="{{ route('customer.orders.show', $order) }}#cancel">
                                     Cancel Order
+                                </a>
+                            @endif
+                            @if($order->status === 'delivered' && $order->shipment_status === 'delivered' && in_array($order->payment_status, ['paid', 'partial_refund'], true))
+                                <a class="btn btn-primary" href="{{ route('customer.orders.show', $order) }}#return-refund">
+                                    Return / Refund
                                 </a>
                             @endif
                         </div>

@@ -648,6 +648,198 @@
     color: #9f1239;
 }
 
+.customer-body .customer-status--refund_pending {
+    border-color: rgba(217, 119, 6, 0.28);
+    background: rgba(217, 119, 6, 0.12);
+    color: #92400e;
+}
+
+.customer-body .customer-status--partial_refund,
+.customer-body .customer-status--refunded {
+    border-color: rgba(37, 99, 235, 0.22);
+    background: rgba(37, 99, 235, 0.10);
+    color: #1e3a8a;
+}
+
+.customer-body .customer-notification-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 18px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+    padding: 18px;
+    border: 1px solid rgba(17, 24, 39, 0.10);
+    border-radius: var(--c-radius-lg);
+    background:
+        radial-gradient(900px 520px at 12% 0%, rgba(99, 102, 241, 0.10), transparent 58%),
+        radial-gradient(700px 480px at 88% 15%, rgba(34, 211, 238, 0.10), transparent 55%),
+        rgba(255, 255, 255, 0.70);
+    box-shadow: var(--c-shadow-sm);
+    backdrop-filter: blur(10px);
+}
+
+.customer-body .customer-notification-toolbar__eyebrow {
+    font-size: 11px;
+    font-weight: 900;
+    color: #9b7f63;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+}
+
+.customer-body .customer-notification-toolbar__title {
+    margin: 4px 0 2px;
+    font-size: 20px;
+    font-weight: 900;
+    color: #4c2f1c;
+}
+
+.customer-body .customer-notification-toolbar__meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    color: #7b6a5b;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.customer-body .customer-notification-toolbar__controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.customer-body .customer-notification-toolbar__form {
+    margin: 0;
+}
+
+.customer-body .customer-segmented-filter {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid rgba(17, 24, 39, 0.10);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.78);
+}
+
+.customer-body .customer-segmented-filter__item {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 38px;
+    padding: 0 14px;
+    border-radius: 999px;
+    color: #6f6257;
+    font-size: 13px;
+    font-weight: 900;
+    text-decoration: none;
+    transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+
+.customer-body .customer-segmented-filter__item span {
+    min-width: 24px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: rgba(17, 24, 39, 0.06);
+    color: #7b6a5b;
+    font-size: 12px;
+}
+
+.customer-body .customer-segmented-filter__item:hover,
+.customer-body .customer-segmented-filter__item.is-active {
+    background: #ffffff;
+    color: #4c2f1c;
+    box-shadow: 0 10px 24px rgba(18, 12, 6, 0.10);
+}
+
+.customer-body .customer-segmented-filter__item.is-active span {
+    background: rgba(var(--c-primary-rgb), 0.12);
+    color: #4c2f1c;
+}
+
+.customer-body .customer-pagination--panel {
+    justify-content: space-between;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    padding: 14px 16px;
+    border: 1px solid rgba(17, 24, 39, 0.10);
+    border-radius: var(--c-radius-md);
+    background: rgba(255, 255, 255, 0.72);
+    box-shadow: var(--c-shadow-sm);
+    backdrop-filter: blur(10px);
+}
+
+.customer-body .customer-pagination__meta {
+    color: #7b6a5b;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.customer-body .customer-pagination__meta strong {
+    color: #4c2f1c;
+    font-weight: 900;
+}
+
+.customer-body .customer-pagination--panel .customer-pager__btn {
+    min-height: 38px;
+    padding: 0 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(17, 24, 39, 0.10);
+    background: rgba(255, 255, 255, 0.82);
+    color: #6f6257;
+    font-size: 13px;
+    font-weight: 900;
+    text-decoration: none;
+    transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+
+.customer-body .customer-pagination--panel .customer-pager__btn:hover {
+    background: #ffffff;
+    color: #4c2f1c;
+    box-shadow: 0 10px 24px rgba(18, 12, 6, 0.10);
+}
+
+.customer-body .customer-pagination--panel .customer-pager__btn.is-disabled {
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+.customer-body .customer-pagination--panel .customer-pager__sep {
+    color: #9b7f63;
+    font-weight: 900;
+    padding: 0 2px;
+}
+
+@media (max-width: 640px) {
+    .customer-body .customer-notification-toolbar,
+    .customer-body .customer-notification-toolbar__controls,
+    .customer-body .customer-segmented-filter,
+    .customer-body .customer-notification-toolbar__form,
+    .customer-body .customer-notification-toolbar__form .btn {
+        width: 100%;
+    }
+
+    .customer-body .customer-segmented-filter__item {
+        flex: 1;
+    }
+
+    .customer-body .customer-pagination--panel,
+    .customer-body .customer-pagination--panel .customer-pager {
+        justify-content: center;
+        width: 100%;
+    }
+
+    .customer-body .customer-pagination__meta {
+        width: 100%;
+        text-align: center;
+    }
+}
+
 /* Buttons: map existing .btn and primary/outline to new style ONLY in customer UIs */
 .storefront-body .btn,
 .customer-body .btn {

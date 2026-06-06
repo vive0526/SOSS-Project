@@ -170,6 +170,46 @@
         </div>
     </div>
 
+    <div class="customer-card" style="margin-top:18px;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
+            <div>
+                <h3 style="margin-bottom: 6px;">Customer Reviews</h3>
+                <div style="color:#7b6a5b;">
+                    @if($reviewCount > 0)
+                        <strong style="color:#4c2f1c;">{{ number_format($averageRating, 1) }}/5</strong>
+                        <span style="color:#d59f16;">{{ str_repeat('★', (int) round($averageRating)) }}</span>
+                        based on {{ $reviewCount }} {{ \Illuminate\Support\Str::plural('review', $reviewCount) }}
+                    @else
+                        No reviews yet.
+                    @endif
+                </div>
+            </div>
+        </div>
+
+        <div style="display:grid; gap:12px; margin-top:14px;">
+            @forelse($reviews as $review)
+                <div style="border:1px solid rgba(17,24,39,.08); border-radius:16px; padding:14px; background:rgba(255,255,255,.62);">
+                    <div style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+                        <div>
+                            <strong>{{ $review->customer?->name ?? 'Customer' }}</strong>
+                            <span style="margin-left:8px; color:#d59f16;">{{ str_repeat('★', (int) $review->rating) }}</span>
+                        </div>
+                        <div style="color:#7b6a5b; font-size:12px;">
+                            Verified purchase · {{ $review->created_at?->format('Y-m-d') }}
+                        </div>
+                    </div>
+                    @if(filled($review->comment))
+                        <div style="margin-top:8px; color:#5e4a3b; line-height:1.6;">
+                            {{ $review->comment }}
+                        </div>
+                    @endif
+                </div>
+            @empty
+                <div class="customer-empty">Be the first verified customer to review this product.</div>
+            @endforelse
+        </div>
+    </div>
+
     @if(!$isCattle)
         <script>
             (function () {

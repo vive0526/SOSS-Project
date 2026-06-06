@@ -418,6 +418,44 @@
     @endif
 
     <div class="admin-card">
+        <h3 style="margin-bottom: 12px;">Return & Refund Requests</h3>
+        @if($order->returnRequests->isEmpty())
+            <p>No return/refund requests for this order.</p>
+        @else
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Status</th>
+                        <th>Reason</th>
+                        <th>Amount</th>
+                        <th>Customer</th>
+                        <th>Created</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach($order->returnRequests as $returnRequest)
+                        <tr>
+                            <td>#{{ $returnRequest->id }}</td>
+                            <td>{{ ucwords(str_replace('_', ' ', $returnRequest->status)) }}</td>
+                            <td>{{ $returnRequest->reasonLabel() }}</td>
+                            <td>RM {{ number_format($returnRequest->amountRm(), 2) }}</td>
+                            <td>{{ $returnRequest->customer?->name ?? '-' }}</td>
+                            <td>{{ $returnRequest->created_at?->format('Y-m-d H:i') }}</td>
+                            <td>
+                                <a class="btn btn-outline" href="{{ route('order-return-requests.show', $returnRequest) }}">
+                                    View
+                                </a>
+                            </td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        @endif
+    </div>
+
+    <div class="admin-card">
         <h3 style="margin-bottom: 12px;">Status History</h3>
         @if($order->statusHistories->isEmpty())
             <p>No status history available.</p>
