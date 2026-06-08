@@ -126,6 +126,18 @@ class Order extends Model
         return (int) round(((float) ($this->total_amount ?? 0)) * 100);
     }
 
+    public function refundedSucceededCents(): int
+    {
+        return (int) $this->refunds()
+            ->where('status', 'succeeded')
+            ->sum('amount_cents');
+    }
+
+    public function remainingRefundableCents(): int
+    {
+        return max(0, $this->refundableTotalCents() - $this->refundedSucceededCents());
+    }
+
     protected static function booted(): void
     {
         static::creating(function (Order $order) {
@@ -205,6 +217,16 @@ class Order extends Model
     public function refunds(): HasMany
     {
         return $this->hasMany(OrderRefund::class, 'order_id', 'order_id')->orderBy('created_at');
+    }
+
+    public function returnRequests(): HasMany
+    {
+        return $this->hasMany(OrderReturnRequest::class, 'order_id', 'order_id')->orderByDesc('created_at');
+    }
+
+    public function productReviews(): HasMany
+    {
+        return $this->hasMany(ProductReview::class, 'order_id', 'order_id')->latest();
     }
 
     public function isPaymentVerified(): bool

@@ -132,7 +132,7 @@ class OrderController extends Controller
 
     public function show(Order $order)
     {
-        $order->load(['customer', 'assignedTo', 'items.product', 'statusHistories.changedBy', 'refunds.requestedBy']);
+        $order->load(['customer', 'assignedTo', 'items.product', 'statusHistories.changedBy', 'refunds.requestedBy', 'returnRequests.customer']);
 
         $staffUsers = collect();
         if (auth()->user()?->role === 'admin') {

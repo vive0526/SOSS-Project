@@ -99,7 +99,16 @@
                            href="{{ route('categories.index') }}">
                             Categories
                         </a>
+                        <a class="admin-submenu__link {{ request()->is('product-reviews') || request()->is('product-reviews/*') ? 'is-active' : '' }}"
+                           href="{{ route('product-reviews.index') }}">
+                            Product Reviews
+                        </a>
                     </div>
+
+                    <a class="admin-nav__link {{ request()->is('coupons') || request()->is('coupons/*') ? 'is-active' : '' }}"
+                       href="{{ route('coupons.index') }}">
+                        Coupons
+                    </a>
 
                     {{-- Orders --}}
                     <button class="admin-nav__link admin-nav__toggle"
@@ -113,6 +122,10 @@
                         <a class="admin-submenu__link {{ request()->is('orders') || request()->is('orders/*') ? 'is-active' : '' }}"
                            href="{{ route('orders.index') }}">
                             Orders List
+                        </a>
+                        <a class="admin-submenu__link {{ request()->is('order-return-requests') || request()->is('order-return-requests/*') ? 'is-active' : '' }}"
+                           href="{{ route('order-return-requests.index') }}">
+                            Return Requests
                         </a>
                         <a class="admin-submenu__link {{ request()->is('cattle-requests') || request()->is('cattle-requests/*') ? 'is-active' : '' }}"
                            href="{{ route('cattle-requests.index') }}">
@@ -219,8 +232,17 @@
                                href="{{ route('categories.index') }}">
                                 Categories
                             </a>
+                            <a class="admin-submenu__link {{ request()->is('product-reviews') || request()->is('product-reviews/*') ? 'is-active' : '' }}"
+                               href="{{ route('product-reviews.index') }}">
+                                Product Reviews
+                            </a>
                         @endif
                     </div>
+
+                    <a class="admin-nav__link {{ request()->is('coupons') || request()->is('coupons/*') ? 'is-active' : '' }}"
+                       href="{{ route('coupons.index') }}">
+                        Coupons
+                    </a>
 
                     {{-- Orders --}}
                     <button class="admin-nav__link admin-nav__toggle"
@@ -234,6 +256,10 @@
                         <a class="admin-submenu__link {{ request()->is('orders') || request()->is('orders/*') ? 'is-active' : '' }}"
                            href="{{ route('orders.index') }}">
                             All Orders
+                        </a>
+                        <a class="admin-submenu__link {{ request()->is('order-return-requests') || request()->is('order-return-requests/*') ? 'is-active' : '' }}"
+                           href="{{ route('order-return-requests.index') }}">
+                            Return Requests
                         </a>
                         <a class="admin-submenu__link {{ request()->is('cattle-requests') || request()->is('cattle-requests/*') ? 'is-active' : '' }}"
                            href="{{ route('cattle-requests.index') }}">

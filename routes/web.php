@@ -10,11 +10,16 @@ use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\OperatingUnitController;
 use App\Http\Controllers\CodeController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\ProductReviewController;
 use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\CouponController;
 use App\Http\Controllers\CustomerProductController;
+use App\Http\Controllers\CustomerProductReviewController;
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\CustomerOrderController;
+use App\Http\Controllers\OrderReturnRequestController;
+use App\Http\Controllers\CustomerOrderReturnRequestController;
 use App\Http\Controllers\CustomerCartController;
 use App\Http\Controllers\CustomerCheckoutController;
 use App\Http\Controllers\CustomerDiscountController;
@@ -290,6 +295,14 @@ Route::middleware(['auth', 'role:admin,staff'])->group(function () {
     Route::patch('/orders/{order}/shipment', [OrderController::class, 'updateShipment'])->name('orders.update-shipment');
     Route::patch('/orders/{order}/cancel', [OrderController::class, 'cancel'])->name('orders.cancel');
     Route::patch('/orders/{order}/reopen', [OrderController::class, 'reopen'])->name('orders.reopen');
+    Route::get('/product-reviews', [ProductReviewController::class, 'index'])->name('product-reviews.index');
+    Route::patch('/product-reviews/{productReview}/status', [ProductReviewController::class, 'updateStatus'])->name('product-reviews.update-status');
+
+    Route::get('/order-return-requests', [OrderReturnRequestController::class, 'index'])->name('order-return-requests.index');
+    Route::get('/order-return-requests/{orderReturnRequest}', [OrderReturnRequestController::class, 'show'])->name('order-return-requests.show');
+    Route::patch('/order-return-requests/{orderReturnRequest}/approve', [OrderReturnRequestController::class, 'approve'])->name('order-return-requests.approve');
+    Route::patch('/order-return-requests/{orderReturnRequest}/reject', [OrderReturnRequestController::class, 'reject'])->name('order-return-requests.reject');
+    Route::patch('/order-return-requests/{orderReturnRequest}/return-received', [OrderReturnRequestController::class, 'markReturnReceived'])->name('order-return-requests.return-received');
 
     Route::get('/cattle-requests', [CattleRequestController::class, 'index'])->name('cattle-requests.index');
     Route::get('/cattle-requests/{cattleRequest}', [CattleRequestController::class, 'show'])->name('cattle-requests.show');
@@ -302,6 +315,8 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
     Route::patch('/orders/{order}/assign', [OrderController::class, 'assign'])->name('orders.assign');
     Route::post('/orders/{order}/refund/stripe', [StripeRefundController::class, 'store'])
         ->name('orders.refund.stripe');
+    Route::patch('/order-return-requests/{orderReturnRequest}/refunded', [OrderReturnRequestController::class, 'markRefunded'])
+        ->name('order-return-requests.refunded');
 });
 
 Route::middleware(['auth', 'role:admin'])->group(function () {
@@ -332,6 +347,20 @@ Route::middleware(['auth', 'role:admin,staff'])->group(function () {
     Route::get('/categories/{category}/edit', [CategoryController::class, 'edit'])->name('categories.edit');
     Route::put('/categories/{category}', [CategoryController::class, 'update'])->name('categories.update');
     Route::delete('/categories/{category}', [CategoryController::class, 'destroy'])->name('categories.destroy');
+});
+
+/*
+|--------------------------------------------------------------------------|
+| Coupon Management (Admin & Staff)                                        |
+|--------------------------------------------------------------------------|
+*/
+Route::middleware(['auth', 'role:admin,staff'])->group(function () {
+    Route::get('/coupons', [CouponController::class, 'index'])->name('coupons.index');
+    Route::get('/coupons/create', [CouponController::class, 'create'])->name('coupons.create');
+    Route::post('/coupons', [CouponController::class, 'store'])->name('coupons.store');
+    Route::get('/coupons/{coupon}/edit', [CouponController::class, 'edit'])->name('coupons.edit');
+    Route::put('/coupons/{coupon}', [CouponController::class, 'update'])->name('coupons.update');
+    Route::delete('/coupons/{coupon}', [CouponController::class, 'destroy'])->name('coupons.destroy');
 });
 
 /*
@@ -453,6 +482,16 @@ Route::middleware(['auth', 'verified', 'role:customer'])
             ->name('orders.show');
         Route::patch('/orders/{order}/cancel', [CustomerOrderController::class, 'cancel'])
             ->name('orders.cancel');
+        Route::post('/orders/{order}/return-requests', [CustomerOrderReturnRequestController::class, 'store'])
+            ->name('orders.return-requests.store');
+        Route::get('/return-requests', [CustomerOrderReturnRequestController::class, 'index'])
+            ->name('return-requests.index');
+        Route::get('/return-requests/{orderReturnRequest}', [CustomerOrderReturnRequestController::class, 'show'])
+            ->name('return-requests.show');
+        Route::patch('/return-requests/{orderReturnRequest}/cancel', [CustomerOrderReturnRequestController::class, 'cancel'])
+            ->name('return-requests.cancel');
+        Route::post('/order-items/{orderItem}/reviews', [CustomerProductReviewController::class, 'store'])
+            ->name('order-items.reviews.store');
 
         Route::get('/products', [CustomerProductController::class, 'index'])
             ->name('products.index');

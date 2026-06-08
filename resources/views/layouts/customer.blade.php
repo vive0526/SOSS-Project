@@ -30,6 +30,10 @@
                    href="{{ route('customer.orders.index') }}">
                     Orders
                 </a>
+                <a class="customer-nav__link {{ request()->is('customer/return-requests') || request()->is('customer/return-requests/*') ? 'is-active' : '' }}"
+                   href="{{ route('customer.return-requests.index') }}">
+                    Return Requests
+                </a>
                 <a class="customer-nav__link {{ request()->is('customer/cattle-requests') || request()->is('customer/cattle-requests/*') ? 'is-active' : '' }}"
                    href="{{ route('customer.cattle-requests.index') }}">
                     Cattle Requests

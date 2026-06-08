@@ -5,6 +5,12 @@
 @section('page_subtitle', 'Important updates and announcements')
 
 @section('content')
+    @php
+        $activeFilter = request('filter') === 'unread' ? 'unread' : 'all';
+        $totalNotifications = auth()->user()?->notifications()->count() ?? 0;
+        $unreadNotifications = auth()->user()?->unreadNotifications()->count() ?? 0;
+    @endphp
+
     @if(session('success'))
         <div class="customer-card">
             <p>{{ session('success') }}</p>
@@ -18,18 +24,35 @@
     @endif
 
     <section class="customer-section">
-        <div class="customer-section__head" style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
-            <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
-                <a class="btn btn-outline" href="{{ route('customer.notifications.index') }}">
-                    All
-                </a>
-                <a class="btn btn-outline" href="{{ route('customer.notifications.index', ['filter' => 'unread']) }}">
-                    Unread
-                </a>
-                @if(auth()->user()?->unreadNotifications?->count())
-                    <form method="POST" action="{{ route('customer.notifications.read-all') }}">
+        <div class="customer-notification-toolbar">
+            <div>
+                <div class="customer-notification-toolbar__eyebrow">Inbox</div>
+                <h2 class="customer-notification-toolbar__title">Notification Center</h2>
+                <p class="customer-notification-toolbar__meta">
+                    {{ $totalNotifications }} total
+                    <span aria-hidden="true">•</span>
+                    {{ $unreadNotifications }} unread
+                </p>
+            </div>
+
+            <div class="customer-notification-toolbar__controls">
+                <div class="customer-segmented-filter" aria-label="Notification filter">
+                    <a class="customer-segmented-filter__item {{ $activeFilter === 'all' ? 'is-active' : '' }}"
+                       href="{{ route('customer.notifications.index') }}">
+                        All
+                        <span>{{ $totalNotifications }}</span>
+                    </a>
+                    <a class="customer-segmented-filter__item {{ $activeFilter === 'unread' ? 'is-active' : '' }}"
+                       href="{{ route('customer.notifications.index', ['filter' => 'unread']) }}">
+                        Unread
+                        <span>{{ $unreadNotifications }}</span>
+                    </a>
+                </div>
+
+                @if($unreadNotifications > 0)
+                    <form method="POST" action="{{ route('customer.notifications.read-all') }}" class="customer-notification-toolbar__form">
                         @csrf
-                        <button type="submit" class="btn btn-primary">Mark all read</button>
+                        <button type="submit" class="btn btn-primary">Mark All Read</button>
                     </form>
                 @endif
             </div>
@@ -85,10 +108,9 @@
                 @endforeach
             </div>
 
-            <div style="margin-top:14px;">
-                {{ $notifications->links() }}
+            <div style="margin-top:16px;">
+                {{ $notifications->links('pagination.customer') }}
             </div>
         @endif
     </section>
 @endsection
-

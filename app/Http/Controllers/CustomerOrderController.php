@@ -48,7 +48,7 @@ class CustomerOrderController extends Controller
     {
         $this->authorizeCustomer($order);
 
-        $order->load(['items.product', 'statusHistories.changedBy']);
+        $order->load(['items.product', 'items.review', 'statusHistories.changedBy', 'refunds', 'returnRequests.statusHistories.changedBy']);
 
         return view('customer.orders.show', [
             'order' => $order,

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Category;
 use App\Models\Product;
+use App\Models\ProductReview;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
@@ -93,7 +94,25 @@ class CustomerProductController extends Controller
             ->where('slug', $productSlug)
             ->firstOrFail();
 
-        return view('customer.products.show', compact('product'));
+        $reviews = ProductReview::query()
+            ->with('customer')
+            ->where('product_id', $product->getKey())
+            ->where('status', 'approved')
+            ->latest()
+            ->take(10)
+            ->get();
+
+        $reviewCount = ProductReview::query()
+            ->where('product_id', $product->getKey())
+            ->where('status', 'approved')
+            ->count();
+
+        $averageRating = (float) ProductReview::query()
+            ->where('product_id', $product->getKey())
+            ->where('status', 'approved')
+            ->avg('rating');
+
+        return view('customer.products.show', compact('product', 'reviews', 'reviewCount', 'averageRating'));
     }
 
     public function stock(Request $request, Product $product)

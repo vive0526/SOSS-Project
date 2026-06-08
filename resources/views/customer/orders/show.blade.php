@@ -9,6 +9,20 @@
         $itemsTotal = $order->items->sum('total_price');
         $statusClass = 'customer-status--' . $order->status;
         $shipmentClass = 'customer-status--' . $order->shipment_status;
+        $paymentClass = 'customer-status--' . ($order->payment_status ?? 'unpaid');
+        $paymentLabel = match ($order->payment_status) {
+            'refunded' => 'Full Refunded',
+            'partial_refund' => 'Partial Refund',
+            'refund_pending' => 'Refund Pending',
+            default => ucwords(str_replace('_', ' ', $order->payment_status ?? 'unpaid')),
+        };
+        $activeReturnRequest = $order->returnRequests->first(fn ($returnRequest) => in_array($returnRequest->status, ['pending', 'approved', 'return_received'], true));
+        $remainingRefundableCents = $order->remainingRefundableCents();
+        $canRequestReturn = $order->status === 'delivered'
+            && $order->shipment_status === 'delivered'
+            && in_array($order->payment_status, ['paid', 'partial_refund'], true)
+            && $remainingRefundableCents > 0
+            && !$activeReturnRequest;
     @endphp
 
     @if(session('success'))
@@ -41,6 +55,9 @@
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
                 <span class="customer-status {{ $statusClass }}">{{ ucfirst($order->status) }}</span>
                 <span class="customer-status {{ $shipmentClass }}">{{ ucfirst($order->shipment_status) }}</span>
+                @if(in_array($order->payment_status, ['refund_pending', 'partial_refund', 'refunded'], true))
+                    <span class="customer-status {{ $paymentClass }}">{{ $paymentLabel }}</span>
+                @endif
             </div>
         </div>
         <div style="display:flex; gap:18px; flex-wrap:wrap; color:#5e4a3b;">
@@ -80,7 +97,7 @@
         <div>
             <h3 style="margin-bottom: 8px;">Order Summary</h3>
             <p><strong>Items:</strong> {{ $order->items->sum('quantity') }}</p>
-            <p><strong>Payment:</strong> {{ $order->payment_verified_at ? 'Verified' : 'Unverified' }}</p>
+            <p><strong>Payment:</strong> {{ $paymentLabel }}</p>
             <p><strong>Shipment:</strong> {{ ucfirst($order->shipment_status) }}</p>
             <p><strong>Subtotal:</strong> RM {{ number_format((float) ($order->subtotal_amount ?? $itemsTotal), 2) }}</p>
             <p><strong>Shipping Fee:</strong> RM {{ number_format((float) ($order->shipping_fee ?? 0), 2) }}</p>
@@ -126,6 +143,61 @@
         </table>
     </div>
 
+    @if($order->status === 'delivered' && $order->shipment_status === 'delivered')
+        <div class="customer-card">
+            <h3 style="margin-bottom: 12px;">Rate Your Products</h3>
+            <div style="display:grid; gap:14px;">
+                @foreach($order->items as $item)
+                    <div style="border:1px solid rgba(17,24,39,.08); border-radius:16px; padding:14px; background:rgba(255,255,255,.62);">
+                        <div style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+                            <div>
+                                <strong>{{ $item->product_name }}</strong>
+                                <div style="color:#7b6a5b; font-size:12px;">
+                                    Verified purchase · Qty {{ $item->quantity }}
+                                </div>
+                            </div>
+                            @if($item->review)
+                                <span class="customer-status customer-status--delivered">
+                                    Reviewed {{ str_repeat('★', (int) $item->review->rating) }}
+                                </span>
+                            @endif
+                        </div>
+
+                        @if($item->review)
+                            @if(filled($item->review->comment))
+                                <div style="margin-top:10px; color:#5e4a3b; line-height:1.6;">
+                                    {{ $item->review->comment }}
+                                </div>
+                            @endif
+                        @else
+                            <form method="POST" action="{{ route('customer.order-items.reviews.store', $item) }}" style="margin-top:12px; display:grid; gap:10px;">
+                                @csrf
+                                <div class="customer-field">
+                                    <label for="rating_{{ $item->id }}">Rating</label>
+                                    <select id="rating_{{ $item->id }}" name="rating" required>
+                                        <option value="">Select rating</option>
+                                        <option value="5">★★★★★ Excellent</option>
+                                        <option value="4">★★★★ Good</option>
+                                        <option value="3">★★★ Average</option>
+                                        <option value="2">★★ Poor</option>
+                                        <option value="1">★ Very Poor</option>
+                                    </select>
+                                </div>
+                                <div class="customer-field">
+                                    <label for="comment_{{ $item->id }}">Comment</label>
+                                    <textarea id="comment_{{ $item->id }}" name="comment" rows="3" placeholder="Optional: share your experience with this product."></textarea>
+                                </div>
+                                <div>
+                                    <button type="submit" class="btn btn-primary">Submit Review</button>
+                                </div>
+                            </form>
+                        @endif
+                    </div>
+                @endforeach
+            </div>
+        </div>
+    @endif
+
     <div class="customer-card">
         <h3 style="margin-bottom: 12px;">Status History</h3>
         @if($order->statusHistories->isEmpty())
@@ -151,6 +223,70 @@
                     @endforeach
                 </tbody>
             </table>
+        @endif
+    </div>
+
+    <div class="customer-card" id="return-refund">
+        <h3 style="margin-bottom: 12px;">Return & Refund</h3>
+        @if($activeReturnRequest)
+            <p>
+                This order has an active return/refund request:
+                <strong>{{ ucwords(str_replace('_', ' ', $activeReturnRequest->status)) }}</strong>.
+            </p>
+            <div style="margin-top:12px;">
+                <a class="btn btn-outline" href="{{ route('customer.return-requests.show', $activeReturnRequest) }}">
+                    View Request
+                </a>
+            </div>
+        @elseif($canRequestReturn)
+            <form method="POST" action="{{ route('customer.orders.return-requests.store', $order) }}" enctype="multipart/form-data">
+                @csrf
+                <div class="customer-field">
+                    <label for="reason">Reason</label>
+                    <select name="reason" id="reason" required>
+                        @foreach(\App\Models\OrderReturnRequest::REASONS as $value => $label)
+                            <option value="{{ $value }}">{{ $label }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="customer-field">
+                    <label for="requested_amount">Refund Amount (RM, optional)</label>
+                    <input type="number"
+                           id="requested_amount"
+                           name="requested_amount"
+                           min="0.01"
+                           max="{{ number_format($remainingRefundableCents / 100, 2, '.', '') }}"
+                           step="0.01"
+                           placeholder="{{ number_format($remainingRefundableCents / 100, 2, '.', '') }}">
+                    <p style="color:#7b6a5b; font-size:12px;">
+                        Leave blank to request the full remaining refundable balance.
+                    </p>
+                </div>
+                <div class="customer-field">
+                    <label for="customer_note">Details</label>
+                    <textarea id="customer_note" name="customer_note" rows="4" required>{{ old('customer_note') }}</textarea>
+                </div>
+                <div class="customer-field">
+                    <label for="evidence_photos">Proof Photos</label>
+                    <input type="file"
+                           id="evidence_photos"
+                           name="evidence_photos[]"
+                           accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                           multiple>
+                    <p style="color:#7b6a5b; font-size:12px;">
+                        Required for wrong item, damaged item, and quality issue. Upload up to 5 photos, 4MB each.
+                    </p>
+                </div>
+                <div style="margin-top:12px;">
+                    <button type="submit" class="btn btn-primary" onclick="return confirm('Submit this return/refund request?')">
+                        Submit Return/Refund Request
+                    </button>
+                </div>
+            </form>
+        @else
+            <p>
+                Return/refund requests are available only after a delivered paid order has refundable balance.
+            </p>
         @endif
     </div>
 
