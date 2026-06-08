@@ -14,7 +14,9 @@ return new class extends Migration
 
         Schema::create('order_return_request_status_histories', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('order_return_request_id')->constrained('order_return_requests')->cascadeOnDelete();
+            $table->unsignedBigInteger('order_return_request_id');
+            $table->foreign('order_return_request_id', 'orrsh_order_return_request_id_fk')
+                  ->references('id')->on('order_return_requests')->cascadeOnDelete();
             $table->string('status', 20)->index();
             $table->text('note')->nullable();
             $table->string('changed_by', 16)->nullable()->index();
