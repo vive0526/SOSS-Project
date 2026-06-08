@@ -3,8 +3,8 @@
 
         {{-- LOGO --}}
         <div>
-            <a href="/" style="text-decoration: none; font-weight: bold;">
-                SOSS
+            <a href="/" style="text-decoration: none;">
+                <img src="{{ asset('images/logo.png') }}" alt="SOSS Logo" style="height: 40px;">
             </a>
         </div>
 
