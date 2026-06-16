@@ -50,6 +50,9 @@ class CustomerStripeCheckoutController extends Controller
         } catch (ApiErrorException|\RuntimeException $e) {
             Log::error('Unable to start Stripe checkout.', [
                 'order_id' => $order->getKey(),
+                'payment_method' => $order->payment_method,
+                'success_url' => $successUrl,
+                'cancel_url' => $cancelUrl,
                 'error' => $e->getMessage(),
             ]);
             return redirect()->route('customer.orders.show', $order)

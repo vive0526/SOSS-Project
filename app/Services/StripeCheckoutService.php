@@ -18,10 +18,17 @@ class StripeCheckoutService
             throw new \RuntimeException('Stripe secret key is not configured.');
         }
 
+        if (!in_array($paymentMethodType, ['card', 'fpx'], true)) {
+            throw new \RuntimeException('Unsupported Stripe payment method.');
+        }
+
         $order->loadMissing('items');
 
         $currency = 'myr';
         $expectedTotal = $this->toStripeAmount($order->total_amount);
+        if ($expectedTotal <= 0) {
+            throw new \RuntimeException('Order total must be greater than zero for Stripe checkout.');
+        }
 
         $lineItems = $this->buildLineItems($order, $currency);
         $computedTotal = array_sum(array_map(
@@ -29,7 +36,7 @@ class StripeCheckoutService
             $lineItems
         ));
 
-        if ($computedTotal !== $expectedTotal) {
+        if ($lineItems === [] || $computedTotal !== $expectedTotal) {
             Log::warning('Stripe line item total mismatch; falling back to single line item.', [
                 'order_id' => $order->getKey(),
                 'expected_total' => $expectedTotal,
@@ -49,6 +56,7 @@ class StripeCheckoutService
         }
 
         $stripe = new StripeClient($secretKey);
+        $metadata = $this->buildMetadata($order);
 
         try {
             return $stripe->checkout->sessions->create([
@@ -57,23 +65,18 @@ class StripeCheckoutService
                 'line_items' => $lineItems,
                 'success_url' => $successUrl,
                 'cancel_url' => $cancelUrl,
-                'client_reference_id' => $order->getKey(),
-                'metadata' => [
-                    'order_id' => $order->getKey(),
-                    'order_number' => $order->order_number,
-                    'user_id' => $order->user_id,
-                ],
+                'client_reference_id' => (string) $order->getKey(),
+                'metadata' => $metadata,
                 'payment_intent_data' => [
-                    'metadata' => [
-                        'order_id' => $order->getKey(),
-                        'order_number' => $order->order_number,
-                        'user_id' => $order->user_id,
-                    ],
+                    'metadata' => $metadata,
                 ],
             ]);
         } catch (ApiErrorException $e) {
             Log::error('Failed creating Stripe Checkout Session.', [
                 'order_id' => $order->getKey(),
+                'payment_method_type' => $paymentMethodType,
+                'success_url' => $successUrl,
+                'cancel_url' => $cancelUrl,
                 'error' => $e->getMessage(),
             ]);
             throw $e;
@@ -89,17 +92,20 @@ class StripeCheckoutService
 
         foreach ($order->items as $item) {
             $unitAmount = $this->toStripeAmount($item->unit_price);
-            if ($unitAmount <= 0) {
+            $quantity = (int) $item->quantity;
+            if ($unitAmount <= 0 || $quantity <= 0) {
                 continue;
             }
 
             $lineItems[] = [
-                'quantity' => (int) $item->quantity,
+                'quantity' => $quantity,
                 'price_data' => [
                     'currency' => $currency,
                     'unit_amount' => $unitAmount,
                     'product_data' => [
-                        'name' => (string) $item->product_name,
+                        'name' => trim((string) $item->product_name) !== ''
+                            ? (string) $item->product_name
+                            : 'Order Item',
                     ],
                 ],
             ];
@@ -134,6 +140,20 @@ class StripeCheckoutService
         }
 
         return $lineItems;
+    }
+
+    /**
+     * Stripe metadata values must be strings.
+     *
+     * @return array<string, string>
+     */
+    private function buildMetadata(Order $order): array
+    {
+        return [
+            'order_id' => (string) $order->getKey(),
+            'order_number' => (string) $order->order_number,
+            'user_id' => (string) $order->user_id,
+        ];
     }
 
     private function toStripeAmount($amount): int
