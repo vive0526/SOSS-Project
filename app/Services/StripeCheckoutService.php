@@ -13,9 +13,13 @@ class StripeCheckoutService
 {
     public function createCheckoutSession(Order $order, string $paymentMethodType, string $successUrl, string $cancelUrl): Session
     {
-        $secretKey = (string) config('services.stripe.secret');
+        $secretKey = trim((string) config('services.stripe.secret'));
         if ($secretKey === '') {
             throw new \RuntimeException('Stripe secret key is not configured.');
+        }
+
+        if (!str_starts_with($secretKey, 'sk_')) {
+            throw new \RuntimeException('Stripe secret key is invalid; configure STRIPE_SECRET_KEY with an sk_ key.');
         }
 
         if (!in_array($paymentMethodType, ['card', 'fpx'], true)) {

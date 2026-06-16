@@ -34,9 +34,9 @@ class CustomerCheckoutController extends Controller
 
     private function isStripeConfigured(): bool
     {
-        $secret = config('services.stripe.secret');
+        $secret = trim((string) config('services.stripe.secret'));
 
-        return is_string($secret) && trim($secret) !== '';
+        return str_starts_with($secret, 'sk_');
     }
 
     /**
