@@ -34,9 +34,9 @@
             <input
                 type="email"
                 name="email"
-                value="{{ old('email', $request->email) }}"
+                value="{{ $request->email }}"
                 required
-                autofocus
+                readonly
                 autocomplete="username"
             >
 
@@ -47,6 +47,7 @@
                     name="password"
                     id="resetPassword"
                     autocomplete="new-password"
+                    autofocus
                     aria-describedby="resetPasswordRules"
                     data-show-rules="{{ $errors->has('password') ? '1' : '0' }}"
                     required
