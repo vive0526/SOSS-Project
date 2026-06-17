@@ -2124,3 +2124,652 @@
         width: 100%;
     }
 }
+
+/* -----------------------------
+   Customer layout fit polish
+   Keep this last: it normalizes wide pages without changing Blade markup.
+------------------------------ */
+.customer-body .customer-main,
+.storefront-body .sf-main {
+    min-width: 0;
+}
+
+.customer-body .customer-content {
+    width: 100%;
+    max-width: 1220px;
+    margin-inline: auto;
+    box-sizing: border-box;
+}
+
+.storefront-body .sf-container {
+    width: min(calc(100% - clamp(28px, 4vw, 72px)), 1680px);
+    max-width: none;
+    padding-inline: 0;
+}
+
+.storefront-body .sf-content,
+.customer-body .customer-content {
+    display: flow-root;
+}
+
+.storefront-body .customer-toolbar,
+.customer-body .customer-toolbar,
+.storefront-body .customer-section,
+.customer-body .customer-section {
+    width: 100%;
+}
+
+.storefront-body .customer-card,
+.storefront-body .customer-filter,
+.storefront-body .customer-empty,
+.customer-body .customer-card,
+.customer-body .customer-filter,
+.customer-body .customer-empty {
+    max-width: 100%;
+}
+
+.storefront-body .sf-content > .customer-card + .customer-card,
+.customer-body .customer-content > .customer-card + .customer-card,
+.storefront-body .sf-content > .customer-empty + .customer-card,
+.customer-body .customer-content > .customer-empty + .customer-card {
+    margin-top: 16px;
+}
+
+.storefront-body .customer-section__head,
+.customer-body .customer-section__head,
+.storefront-body .customer-products-head,
+.customer-body .customer-products-head {
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.storefront-body .customer-filter {
+    grid-template-columns:
+        minmax(220px, 1.3fr)
+        minmax(180px, 1fr)
+        minmax(130px, 0.72fr)
+        minmax(130px, 0.72fr)
+        minmax(160px, 0.85fr)
+        auto;
+    gap: 12px;
+    align-items: end;
+}
+
+.customer-body .customer-filter {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+    align-items: end;
+}
+
+.storefront-body .customer-filter .customer-actions,
+.customer-body .customer-filter .customer-actions {
+    align-self: end;
+}
+
+.storefront-body .customer-filter .customer-actions {
+    display: flex;
+    justify-content: flex-end;
+    white-space: nowrap;
+}
+
+.storefront-body .customer-products {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr));
+    gap: clamp(16px, 1.45vw, 24px);
+    justify-content: stretch;
+    align-items: stretch;
+}
+
+.customer-body .customer-products {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+    justify-content: stretch;
+    align-items: stretch;
+}
+
+.storefront-body .customer-products > .customer-empty,
+.customer-body .customer-products > .customer-empty {
+    grid-column: 1 / -1;
+}
+
+.storefront-body .customer-product-card,
+.customer-body .customer-product-card {
+    width: 100%;
+    min-width: 0;
+    height: 100%;
+}
+
+.storefront-body .customer-product-card {
+    border-radius: 14px;
+}
+
+.storefront-body .customer-product__media,
+.customer-body .customer-product__media {
+    flex: 0 0 auto;
+    aspect-ratio: 4 / 3;
+    overflow: hidden;
+}
+
+.storefront-body .customer-product__media img,
+.customer-body .customer-product__media img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.storefront-body .customer-product__body,
+.customer-body .customer-product__body {
+    flex: 1;
+    grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+}
+
+.storefront-body .customer-product__body {
+    padding: 16px;
+}
+
+.storefront-body .customer-product__meta,
+.customer-body .customer-product__meta {
+    min-width: 0;
+    align-items: flex-start;
+}
+
+.storefront-body .customer-badge,
+.customer-body .customer-badge,
+.storefront-body .customer-stock,
+.customer-body .customer-stock,
+.storefront-body .customer-status,
+.customer-body .customer-status {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+}
+
+.storefront-body .customer-product__title,
+.customer-body .customer-product__title {
+    display: -webkit-box;
+    min-height: 2.6em;
+    overflow: hidden;
+    line-height: 1.3;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.storefront-body .customer-product__desc,
+.customer-body .customer-product__desc {
+    display: -webkit-box;
+    min-height: 4.65em;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+}
+
+.storefront-body .customer-product__body > .btn,
+.customer-body .customer-product__body > .btn {
+    align-self: end;
+    justify-self: stretch;
+}
+
+.storefront-body .customer-kpis,
+.customer-body .customer-kpis {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 190px), 1fr));
+    align-items: stretch;
+}
+
+.storefront-body .customer-kpis .customer-card,
+.customer-body .customer-kpis .customer-card {
+    height: 100%;
+}
+
+.storefront-body .customer-card:has(.customer-table),
+.customer-body .customer-card:has(.customer-table),
+.storefront-body .co-items,
+.customer-body .co-items {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.storefront-body .customer-table,
+.customer-body .customer-table {
+    width: 100%;
+}
+
+.storefront-body .customer-table th,
+.storefront-body .customer-table td,
+.customer-body .customer-table th,
+.customer-body .customer-table td {
+    vertical-align: middle;
+}
+
+.storefront-body .co-checkout {
+    max-width: 1180px;
+    margin-inline: auto;
+}
+
+.storefront-body .co-grid {
+    align-items: start;
+}
+
+.storefront-body .co-summary {
+    position: sticky;
+    top: 150px;
+}
+
+@media (min-width: 1800px) {
+    .storefront-body .sf-container {
+        width: min(calc(100% - 96px), 1760px);
+    }
+}
+
+@media (min-width: 1280px) {
+    .customer-body .customer-content {
+        padding-inline: 36px;
+    }
+}
+
+@media (max-width: 1200px) {
+    .storefront-body .customer-filter {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .storefront-body .customer-filter .customer-actions {
+        justify-content: flex-start;
+    }
+}
+
+@media (max-width: 980px) {
+    .customer-body .customer-content {
+        max-width: 760px;
+    }
+
+    .storefront-body .customer-filter {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .storefront-body .co-summary {
+        position: static;
+    }
+}
+
+@media (max-width: 640px) {
+    .storefront-body .sf-container {
+        width: calc(100% - 28px);
+    }
+
+    .customer-body .customer-content {
+        max-width: none;
+        width: 100%;
+    }
+
+    .storefront-body .customer-filter,
+    .customer-body .customer-filter,
+    .storefront-body .customer-products,
+    .customer-body .customer-products,
+    .storefront-body .customer-kpis,
+    .customer-body .customer-kpis {
+        grid-template-columns: 1fr;
+    }
+
+    .storefront-body .customer-filter .customer-actions,
+    .customer-body .customer-filter .customer-actions {
+        display: grid;
+        grid-template-columns: 1fr;
+        align-items: stretch;
+    }
+
+    .storefront-body .customer-product__title,
+    .customer-body .customer-product__title,
+    .storefront-body .customer-product__desc,
+    .customer-body .customer-product__desc {
+        min-height: 0;
+    }
+}
+
+/* -----------------------------
+   Customer-wide responsive fit
+   Applies the same device adjustment rules across all customer pages.
+------------------------------ */
+.customer-body .customer-content {
+    width: min(calc(100% - clamp(24px, 3.5vw, 56px)), 1360px);
+    padding-inline: 0;
+}
+
+.customer-body .customer-content > *,
+.storefront-body .sf-content > * {
+    max-width: 100%;
+}
+
+.customer-body .customer-content > * + *,
+.storefront-body .sf-content > * + * {
+    margin-top: 18px;
+}
+
+.customer-body .customer-card > *,
+.storefront-body .customer-card > *,
+.customer-body .customer-field,
+.storefront-body .customer-field,
+.customer-body .cr-field,
+.storefront-body .cr-field {
+    min-width: 0;
+}
+
+.customer-body .customer-card[style*="display:flex"],
+.storefront-body .customer-card[style*="display:flex"],
+.customer-body .customer-card[style*="display:grid"],
+.storefront-body .customer-card[style*="display:grid"] {
+    max-width: 100%;
+}
+
+.customer-body .customer-form__row,
+.storefront-body .customer-form__row {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
+}
+
+.customer-body .customer-form select,
+.storefront-body .customer-form select,
+.customer-body .customer-form input,
+.storefront-body .customer-form input,
+.customer-body .customer-form textarea,
+.storefront-body .customer-form textarea,
+.customer-body .customer-field select,
+.storefront-body .customer-field select,
+.customer-body .customer-field input,
+.storefront-body .customer-field input,
+.customer-body .customer-field textarea,
+.storefront-body .customer-field textarea,
+.customer-body .cr-field select,
+.customer-body .cr-field input,
+.customer-body .cr-field textarea {
+    max-width: 100%;
+}
+
+.customer-profile,
+.customer-body .customer-section,
+.customer-body .customer-toolbar,
+.customer-body .customer-pagination,
+.storefront-body .customer-section,
+.storefront-body .customer-toolbar,
+.storefront-body .customer-pagination {
+    min-width: 0;
+}
+
+.customer-profile__intro {
+    grid-template-columns: minmax(0, 1.35fr) minmax(260px, 0.65fr);
+}
+
+.customer-profile__intro-text,
+.customer-profile__intro-card,
+.customer-profile__card {
+    min-width: 0;
+}
+
+.customer-profile__grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+    align-items: start;
+}
+
+.customer-profile__meta,
+.customer-profile__name,
+.customer-card__head p,
+.customer-alert,
+.customer-results-meta {
+    overflow-wrap: anywhere;
+}
+
+.cr-shell {
+    grid-template-columns: minmax(260px, 0.82fr) minmax(0, 1.18fr);
+}
+
+.cr-summary,
+.cr-form-card {
+    min-width: 0;
+}
+
+.cr-actions,
+.cr-summary__actions,
+.customer-actions,
+.customer-profile__intro-actions,
+.co-actions,
+.sf-banner__actions,
+.sf-hero__actions,
+.sf-modal__actions {
+    min-width: 0;
+}
+
+.customer-body .customer-notification-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+}
+
+.customer-body .customer-notification-toolbar__controls {
+    justify-content: flex-end;
+}
+
+.customer-body .customer-segmented-filter {
+    max-width: 100%;
+}
+
+.customer-body .customer-segmented-filter__item {
+    min-width: 0;
+    white-space: nowrap;
+}
+
+.customer-body .customer-pager,
+.storefront-body .customer-pager,
+.customer-body .customer-pager__pages,
+.storefront-body .customer-pager__pages {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.storefront-body .sf-hero {
+    grid-template-columns: minmax(0, 1.05fr) minmax(280px, 0.95fr);
+}
+
+.storefront-body .sf-collections {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+}
+
+.storefront-body .sf-promise {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+}
+
+.storefront-body .sf-banner {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.storefront-body .sf-notif-menu {
+    max-width: calc(100vw - 28px);
+}
+
+.storefront-body .sf-modal__panel,
+.customer-body .customer-photo-modal__content {
+    max-width: min(520px, calc(100vw - 28px));
+}
+
+@media (min-width: 1536px) {
+    .customer-body .customer-content {
+        width: min(calc(100% - 72px), 1480px);
+    }
+
+    .customer-body .customer-kpis {
+        grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    }
+}
+
+@media (max-width: 1180px) {
+    .customer-profile__intro,
+    .cr-shell,
+    .storefront-body .sf-hero,
+    .storefront-body .sf-banner {
+        grid-template-columns: 1fr;
+    }
+
+    .customer-body .customer-notification-toolbar {
+        grid-template-columns: 1fr;
+    }
+
+    .customer-body .customer-notification-toolbar__controls {
+        justify-content: flex-start;
+    }
+
+    .cr-summary {
+        position: static;
+    }
+}
+
+@media (max-width: 760px) {
+    .customer-body .customer-content {
+        width: calc(100% - 28px);
+    }
+
+    .customer-body .customer-card[style*="display:flex"],
+    .storefront-body .customer-card[style*="display:flex"] {
+        flex-direction: column !important;
+        align-items: stretch !important;
+    }
+
+    .customer-body .customer-card[style*="display:grid"],
+    .storefront-body .customer-card[style*="display:grid"] {
+        grid-template-columns: 1fr !important;
+    }
+
+    .customer-body .customer-card[style*="text-align:right"],
+    .storefront-body .customer-card[style*="text-align:right"] {
+        text-align: left !important;
+    }
+
+    .customer-profile__intro,
+    .customer-profile__intro-card,
+    .customer-profile__card,
+    .cr-summary,
+    .cr-form-card,
+    .storefront-body .sf-hero,
+    .storefront-body .sf-banner {
+        border-radius: 16px;
+    }
+
+    .customer-profile__intro,
+    .cr-summary,
+    .storefront-body .sf-hero,
+    .storefront-body .sf-banner {
+        padding: 18px;
+    }
+
+    .customer-body .customer-notification-toolbar,
+    .customer-body .customer-notification-toolbar__controls,
+    .customer-body .customer-segmented-filter,
+    .customer-body .customer-notification-toolbar__form,
+    .customer-body .customer-notification-toolbar__form .btn {
+        width: 100%;
+    }
+
+    .customer-body .customer-segmented-filter {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .customer-body .customer-segmented-filter__item {
+        justify-content: center;
+    }
+
+    .customer-body .customer-actions,
+    .storefront-body .customer-actions,
+    .customer-body .cr-actions,
+    .customer-body .cr-summary__actions,
+    .customer-profile__intro-actions,
+    .storefront-body .sf-banner__actions,
+    .storefront-body .sf-hero__actions,
+    .storefront-body .sf-modal__actions {
+        display: grid;
+        grid-template-columns: 1fr;
+        align-items: stretch;
+    }
+
+    .customer-body .customer-actions .btn,
+    .storefront-body .customer-actions .btn,
+    .customer-body .cr-actions .btn,
+    .customer-body .cr-summary__actions .btn,
+    .customer-profile__intro-actions .btn,
+    .storefront-body .sf-banner__actions .btn,
+    .storefront-body .sf-hero__actions .btn,
+    .storefront-body .sf-modal__actions .btn {
+        width: 100%;
+        justify-content: center;
+        text-align: center;
+    }
+
+    .customer-body .customer-pager,
+    .storefront-body .customer-pager {
+        display: grid;
+        grid-template-columns: 1fr;
+        justify-items: stretch;
+    }
+
+    .customer-body .customer-pager__pages,
+    .storefront-body .customer-pager__pages {
+        justify-content: center;
+        overflow-x: auto;
+        padding-bottom: 2px;
+    }
+
+    .customer-body .customer-pager__btn,
+    .storefront-body .customer-pager__btn {
+        justify-content: center;
+    }
+}
+
+@media (max-width: 480px) {
+    .customer-body .customer-content,
+    .storefront-body .sf-container {
+        width: calc(100% - 20px);
+    }
+
+    .customer-body .customer-card,
+    .customer-body .customer-filter,
+    .customer-body .customer-empty,
+    .storefront-body .customer-card,
+    .storefront-body .customer-filter,
+    .storefront-body .customer-empty {
+        padding: 14px;
+    }
+
+    .customer-profile__intro-text h2,
+    .storefront-body .sf-hero__title {
+        font-size: 24px;
+        line-height: 1.18;
+    }
+
+    .customer-body .customer-kpi__value,
+    .storefront-body .customer-kpi__value {
+        font-size: 22px;
+    }
+
+    .customer-body .customer-table,
+    .storefront-body .customer-table {
+        min-width: 560px;
+    }
+}
+
+/* -----------------------------
+   Storefront sticky footer
+   Keeps the footer at the bottom on short pages, below content on long pages.
+------------------------------ */
+.storefront-body {
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+}
+
+.storefront-body .sf-topbar,
+.storefront-body .sf-header,
+.storefront-body .sf-footer {
+    flex: 0 0 auto;
+}
+
+.storefront-body .sf-main {
+    flex: 1 0 auto;
+}
+
+.storefront-body .sf-footer {
+    margin-top: auto;
+}
